@@ -189,6 +189,7 @@ std::string getServerConfigXML()
 // ----------------------------------------------------------------------------
 void writeServerConfigToDisk()
 {
+    return;
     const std::string& config_xml = getServerConfigXML();
     try
     {

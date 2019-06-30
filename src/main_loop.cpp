@@ -453,14 +453,7 @@ void MainLoop::run()
                 input_manager->update(frame_duration);
                 GUIEngine::update(frame_duration);
                 PROFILER_POP_CPU_MARKER();
-                PROFILER_PUSH_CPU_MARKER("Music", 0x7F, 0x00, 0x00);
-                SFXManager::get()->update();
-                PROFILER_POP_CPU_MARKER();
             }
-            // Some protocols in network will use RequestManager
-            PROFILER_PUSH_CPU_MARKER("Database polling update", 0x00, 0x7F, 0x7F);
-            Online::RequestManager::get()->update(frame_duration);
-            PROFILER_POP_CPU_MARKER();
 
             m_ticks_adjustment.lock();
             if (m_ticks_adjustment.getData() != 0)

@@ -24,6 +24,7 @@
 #include "states_screens/online/online_lan.hpp"
 #include "states_screens/online/server_selection.hpp"
 #include "utils/translation.hpp"
+#include "states_screens/dialogs/general_text_field_dialog.hpp"
 
 #include <IGUIButton.h>
 
@@ -34,7 +35,12 @@ using namespace GUIEngine;
 using namespace irr::core;
 using namespace irr::gui;
 using namespace Online;
-
+auto copy = []
+        (GUIEngine::LabelWidget* lw, GUIEngine::TextBoxWidget* tb)->bool
+        {
+            lw->setText(tb->getText(), true);
+            return false;
+        };
 // -----------------------------------------------------------------------------
 
 OnlineLanScreen::OnlineLanScreen() : GUIEngine::Screen("online/lan.stkgui")
@@ -51,10 +57,8 @@ void OnlineLanScreen::beforeAddingWidget()
 
 void OnlineLanScreen::init()
 {
-    RibbonWidget* ribbon = getWidget<RibbonWidget>("lan");
-    assert(ribbon != NULL);
-    ribbon->select("find_lan_server", PLAYER_ID_GAME_MASTER);
-    ribbon->setFocusForPlayer(PLAYER_ID_GAME_MASTER);
+    new GeneralTextFieldDialog(L"Test emoji", [](const irr::core::stringw& a) {}, copy);
+
 }   // init
 
 // -----------------------------------------------------------------------------
@@ -72,14 +76,11 @@ void OnlineLanScreen::eventCallback(Widget* widget, const std::string& name, con
         std::string selection = ribbon->getSelectionIDString(PLAYER_ID_GAME_MASTER);
         if (selection == "create_lan_server")
         {
-            NetworkConfig::get()->setIsLAN();
-            CreateServerScreen::getInstance()->push();
+            new GeneralTextFieldDialog(L"Test emoji", [](const irr::core::stringw& a) {}, copy);
         }
         else if (selection == "find_lan_server")
         {
-            NetworkConfig::get()->setIsLAN();
-            NetworkConfig::get()->setIsServer(false);
-            ServerSelection::getInstance()->push();
+            new GeneralTextFieldDialog(L"Test emoji", [](const irr::core::stringw& a) {}, copy);
         }
     }
     

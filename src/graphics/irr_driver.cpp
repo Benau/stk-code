@@ -647,7 +647,6 @@ void IrrDriver::initDevice()
     if (CVS->isGLSL())
     {
         m_renderer = new ShaderBasedRenderer();
-        preloadShaders();
     }
     else
         m_renderer = new FixedPipelineRenderer();

@@ -90,7 +90,7 @@ InputManager::InputManager() : m_mode(BOOTSTRAP),
 void InputManager::update(float dt)
 {
 #ifdef ENABLE_WIIUSE
-    wiimote_manager->update();
+   // wiimote_manager->update();
 #endif
 
     if(m_timer_in_use)

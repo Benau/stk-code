@@ -236,6 +236,7 @@
 #include "replay/replay_recorder.hpp"
 #include "states_screens/main_menu_screen.hpp"
 #include "states_screens/online/networking_lobby.hpp"
+#include "states_screens/online/online_lan.hpp"
 #include "states_screens/online/register_screen.hpp"
 #include "states_screens/state_manager.hpp"
 #include "states_screens/options/user_screen.hpp"
@@ -1696,83 +1697,7 @@ void initRest()
     font_manager = new FontManager();
     font_manager->loadFonts();
     GUIEngine::init(device, driver, StateManager::get());
-
-    // This only initialises the non-network part of the add-ons manager. The
-    // online section of the add-ons manager will be initialised from a
-    // separate thread running in network HTTP.
-#ifndef SERVER_ONLY
-    addons_manager = NULL;
-    if (!ProfileWorld::isNoGraphics())
-        addons_manager = new AddonsManager();
-#endif
-    Online::ProfileManager::create();
-
-    // The request manager will start the login process in case of a saved
-    // session, so we need to read the main data from the players.xml file.
-    // The rest will be read later (since the rest needs the unlock- and
-    // achievement managers to be created, which can only be created later).
-    PlayerManager::create();
-    Online::RequestManager::get()->startNetworkThread();
-#ifndef SERVER_ONLY
-    if (!ProfileWorld::isNoGraphics())
-        NewsManager::get();   // this will create the news manager
-#endif
-
-    music_manager = new MusicManager();
-    SFXManager::create();
-    // The order here can be important, e.g. KartPropertiesManager needs
-    // defaultKartProperties, which are defined in stk_config.
-    history                 = new History              ();
-    ReplayPlay::create();
-    ReplayRecorder::create();
-    material_manager        = new MaterialManager      ();
-    track_manager           = new TrackManager         ();
-    kart_properties_manager = new KartPropertiesManager();
-    projectile_manager      = new ProjectileManager    ();
-    powerup_manager         = new PowerupManager       ();
-    attachment_manager      = new AttachmentManager    ();
-    highscore_manager       = new HighscoreManager     ();
-
-    // The maximum texture size can not be set earlier, since
-    // e.g. the background image needs to be loaded in high res.
-    irr_driver->setMaxTextureSize();
-    KartPropertiesManager::addKartSearchDir(
-                 file_manager->getAddonsFile("karts/"));
-    track_manager->addTrackSearchDir(
-                 file_manager->getAddonsFile("tracks/"));
-
-    {
-        XMLNode characteristicsNode(file_manager->getAsset("kart_characteristics.xml"));
-        kart_properties_manager->loadCharacteristics(&characteristicsNode);
-    }
-
-    track_manager->loadTrackList();
-    music_manager->addMusicToTracks();
-
-    GUIEngine::addLoadingIcon(irr_driver->getTexture(FileManager::GUI_ICON,
-                                                     "notes.png"      ) );
-
-    grand_prix_manager      = new GrandPrixManager     ();
-    // Consistency check for challenges, and enable all challenges
-    // that have all prerequisites fulfilled
-    grand_prix_manager->checkConsistency();
-    GUIEngine::addLoadingIcon( irr_driver->getTexture(FileManager::GUI_ICON,
-                                                      "cup_gold.png"    ) );
-
-    race_manager            = new RaceManager          ();
-    // default settings for Quickstart
-    race_manager->setNumPlayers(1);
-    race_manager->setNumLaps   (3);
-    race_manager->setMajorMode (RaceManager::MAJOR_MODE_SINGLE);
-    race_manager->setMinorMode (RaceManager::MINOR_MODE_NORMAL_RACE);
-    race_manager->setDifficulty(
-                 (RaceManager::Difficulty)(int)UserConfigParams::m_difficulty);
-
-    if (!track_manager->getTrack(UserConfigParams::m_last_track))
-        UserConfigParams::m_last_track.revertToDefaults();
-
-    race_manager->setTrack(UserConfigParams::m_last_track);
-
+    race_manager = new RaceManager();
 }   // initRest
 
 //=============================================================================
@@ -1962,293 +1887,10 @@ int main(int argc, char *argv[] )
 
         input_manager = new InputManager ();
 
-#ifdef ENABLE_WIIUSE
-        wiimote_manager = new WiimoteManager();
-#endif
-
         // Get into menu mode initially.
         input_manager->setMode(InputManager::MENU);
-        int parent_pid;
-        bool has_parent_process = false;
-        if (CommandLine::has("--parent-process", &parent_pid))
-        {
-            main_loop = new MainLoop(parent_pid);
-            has_parent_process = true;
-        }
-        else
-            main_loop = new MainLoop(0/*parent_pid*/);
-        material_manager->loadMaterial();
-
-        // Preload the explosion effects (explode.png)
-        ParticleKindManager::get()->getParticles("explosion.xml");
-        ParticleKindManager::get()->getParticles("explosion_bomb.xml");
-        ParticleKindManager::get()->getParticles("explosion_cake.xml");
-        ParticleKindManager::get()->getParticles("jump_explosion.xml");
-
-        GUIEngine::addLoadingIcon( irr_driver->getTexture(FileManager::GUI_ICON,
-                                                          "options_video.png"));
-        kart_properties_manager -> loadAllKarts    ();
-        handleXmasMode();
-        handleEasterEarMode();
-
-        // Needs the kart and track directories to load potential challenges
-        // in those dirs, so it can only be created after reading tracks
-        // and karts.
-        unlock_manager = new UnlockManager();
-        AchievementsManager::create();
-
-        // Reading the rest of the player data needs the unlock manager to
-        // initialise the game slots of all players and the AchievementsManager
-        // to initialise the AchievementsStatus, so it is done only now.
-        PlayerManager::get()->initRemainingData();
-
-        GUIEngine::addLoadingIcon( irr_driver->getTexture(FileManager::GUI_ICON,
-                                                          "gui_lock.png"  ) );
-        projectile_manager->loadData();
-
-        // Both item_manager and powerup_manager load models and therefore
-        // textures from the model directory. To avoid reading the
-        // materials.xml twice, we do this here once for both:
-        file_manager->pushTextureSearchPath(file_manager->getAsset(FileManager::MODEL,""), "models");
-        const std::string materials_file =
-            file_manager->getAsset(FileManager::MODEL,"materials.xml");
-        if(materials_file!="")
-        {
-            // Some of the materials might be needed later, so just add
-            // them all permanently (i.e. as shared). Adding them temporary
-            // will actually not be possible: powerup_manager adds some
-            // permanent icon materials, which would (with the current
-            // implementation) make the temporary materials permanent anyway.
-            material_manager->addSharedMaterial(materials_file);
-        }
-        Referee::init();
-        powerup_manager->loadPowerupsModels();
-        ItemManager::loadDefaultItemMeshes();
-
-        GUIEngine::addLoadingIcon( irr_driver->getTexture(FileManager::GUI_ICON,
-                                                          "gift.png")       );
-
-        attachment_manager->loadModels();
-        file_manager->popTextureSearchPath();
-
-        GUIEngine::addLoadingIcon( irr_driver->getTexture(FileManager::GUI_ICON,
-                                                          "banana.png")    );
-
-        //handleCmdLine() needs InitTuxkart() so it can't be called first
-        if (!handleCmdLine(!server_config.empty(), has_parent_process))
-            exit(0);
-
-#ifndef SERVER_ONLY
-        if (!ProfileWorld::isNoGraphics())
-        {
-            addons_manager->checkInstalledAddons();
-
-            // Load addons.xml to get info about add-ons even when not
-            // allowed to access the Internet
-            if (UserConfigParams::m_internet_status !=
-                Online::RequestManager::IPERM_ALLOWED)
-            {
-                std::string xml_file = file_manager->getAddonsFile("addonsX.xml");
-                if (file_manager->fileExists(xml_file))
-                {
-                    try
-                    {
-                        const XMLNode *xml = new XMLNode(xml_file);
-                        addons_manager->initAddons(xml);
-                    }
-                    catch (std::runtime_error& e)
-                    {
-                        Log::warn("Addons", "Exception thrown when initializing add-ons manager : %s", e.what());
-                    }
-                }
-            }
-        }
-#endif
-
-        if(UserConfigParams::m_unit_testing)
-        {
-            runUnitTests();
-            exit(0);
-        }
-
-#ifndef SERVER_ONLY
-        if (!ProfileWorld::isNoGraphics())
-        {
-            // Some Android devices have only 320x240 and height >= 480 is bare
-            // minimum to make the GUI working as expected.
-            if (irr_driver->getActualScreenSize().Height < 480)
-            {
-                if (UserConfigParams::m_old_driver_popup)
-                {
-                    MessageDialog *dialog =
-                        new MessageDialog(_("Your screen resolution is too "
-                                            "low to run STK."),
-                                            /*from queue*/ true);
-                    GUIEngine::DialogQueue::get()->pushDialog(dialog);
-                }
-                Log::warn("main", "Screen size is too small!");
-            }
-            
-            #ifdef ANDROID
-            if (UserConfigParams::m_multitouch_controls == MULTITOUCH_CONTROLS_UNDEFINED)
-            {
-                int32_t touch = AConfiguration_getTouchscreen(
-                                                    global_android_app->config);
-                
-                if (touch != ACONFIGURATION_TOUCHSCREEN_NOTOUCH)
-                {
-                    InitAndroidDialog* init_android = new InitAndroidDialog(
-                                                                    0.6f, 0.6f);
-                    GUIEngine::DialogQueue::get()->pushDialog(init_android);
-                }
-            }
-            #endif
-
-            if (GraphicsRestrictions::isDisabled(
-                GraphicsRestrictions::GR_DRIVER_RECENT_ENOUGH))
-            {
-                if (UserConfigParams::m_old_driver_popup)
-                {
-                    MessageDialog *dialog =
-                        new MessageDialog(_("Your driver version is too old. "
-                                            "Please install the latest video "
-                                            "drivers."), /*from queue*/ true);
-                    GUIEngine::DialogQueue::get()->pushDialog(dialog);
-                }
-                Log::warn("OpenGL", "Driver is too old!");
-            }
-            else if (!CVS->isGLSL())
-            {
-                #if !defined(ANDROID)
-                if (UserConfigParams::m_old_driver_popup)
-                {
-                    #ifdef USE_GLES2
-                    irr::core::stringw version = "OpenGL ES 3.0";
-                    #else
-                    irr::core::stringw version = "OpenGL 3.3";
-                    #endif
-                    MessageDialog *dialog = new MessageDialog(_(
-                        "Your graphics driver appears to be very old. Please "
-                        "check if an update is available. SuperTuxKart "
-                        "recommends a driver supporting %s or better. The game "
-                        "will likely still run, but in a reduced-graphics mode.",
-                        version), /*from queue*/ true);
-                    GUIEngine::DialogQueue::get()->pushDialog(dialog);
-                }
-                #endif
-                Log::warn("OpenGL", "OpenGL version is too old!");
-            }
-
-            // Note that on the very first run of STK internet status is set to
-            // "not asked", so the report will only be sent in the next run.
-            if(UserConfigParams::m_internet_status==Online::RequestManager::IPERM_ALLOWED)
-            {
-                HardwareStats::reportHardwareStats();
-            }
-        }
-#endif
-
-        if (STKHost::existHost())
-        {
-            NetworkingLobby::getInstance()->push();
-        }
-        else if (!UserConfigParams::m_no_start_screen)
-        {
-            if (UserConfigParams::m_enforce_current_player)
-            {
-                PlayerManager::get()->enforceCurrentPlayer();
-            }
-
-            // If there is a current player, it was saved in the config file,
-            // so we immediately start the main menu (unless it was requested
-            // to always show the login screen). Otherwise show the login
-            // screen first.
-            if(PlayerManager::getCurrentPlayer() && !
-                UserConfigParams::m_always_show_login_screen)
-            {
-                MainMenuScreen::getInstance()->push();
-            }
-            else
-            {
-                UserScreen::getInstance()->push();
-                // If there is no player, push the RegisterScreen on top of
-                // the login screen. This way on first start players are
-                // forced to create a player.
-                if (PlayerManager::get()->getNumPlayers() == 0)
-                {
-                    RegisterScreen::getInstance()->push();
-                    RegisterScreen::getInstance()->setParent(UserScreen::getInstance());
-                }
-            }
-#ifdef ENABLE_WIIUSE
-            // Show a dialog to allow connection of wiimotes. */
-            if(WiimoteManager::isEnabled())
-            {
-                wiimote_manager->askUserToConnectWiimotes();
-            }
-#endif
-            askForInternetPermission();
-        }
-        else
-        {
-            setupRaceStart();
-            // Go straight to the race
-            StateManager::get()->enterGameState();
-        }
-
-#ifndef SERVER_ONLY
-        // If an important news message exists it is shown in a popup dialog.
-        if (!ProfileWorld::isNoGraphics())
-        {
-            const core::stringw important_message =
-                                        NewsManager::get()->getImportantMessage();
-            if (important_message!="")
-            {
-                new MessageDialog(important_message,
-                                MessageDialog::MESSAGE_DIALOG_OK,
-                                NULL, true);
-            }   // if important_message
-        }
-#endif
-
-        // Replay a race
-        // =============
-        if(history->replayHistory())
-        {
-            // This will setup the race manager etc.
-            history->Load();
-            if (!History::m_online_history_replay)
-            {
-                race_manager->setupPlayerKartInfo();
-                race_manager->startNew(false);
-                main_loop->run();
-                // The run() function will only return if the user aborts.
-                Log::flushBuffers();
-                exit(-3);
-            }   // if !online
-        }
-
-        // Not replaying
-        // =============
-        if(!ProfileWorld::isProfileMode())
-        {
-            if(UserConfigParams::m_no_start_screen)
-            {
-                // Quickstart (-N)
-                // ===============
-                // all defaults are set in InitTuxkart()
-                race_manager->setupPlayerKartInfo();
-                race_manager->startNew(false);
-            }
-        }
-        else  // profile
-        {
-            // Profiling
-            // =========
-            race_manager->setMajorMode (RaceManager::MAJOR_MODE_SINGLE);
-            race_manager->setupPlayerKartInfo();
-            race_manager->startNew(false);
-        }
+        OnlineLanScreen::getInstance()->push();
+        main_loop = new MainLoop(0);
         main_loop->run();
 
     }  // try
@@ -2324,21 +1966,14 @@ static void cleanSuperTuxKart()
 
     delete main_loop;
 
-    if(Online::RequestManager::isRunning())
-        Online::RequestManager::get()->stopNetworkThread();
-
     // Stop music (this request will go into the sfx manager queue, so it needs
     // to be done before stopping the thread).
-    music_manager->stopMusic();
-    SFXManager::get()->stopThread();
     irr_driver->updateConfigIfRelevant();
-    AchievementsManager::destroy();
     Referee::cleanup();
     if(race_manager)            delete race_manager;
     if(grand_prix_manager)      delete grand_prix_manager;
     if(highscore_manager)       delete highscore_manager;
     if(attachment_manager)      delete attachment_manager;
-    ItemManager::removeTextures();
     if(powerup_manager)         delete powerup_manager;
     if(projectile_manager)      delete projectile_manager;
     if(kart_properties_manager) delete kart_properties_manager;
@@ -2347,10 +1982,7 @@ static void cleanSuperTuxKart()
     if(history)                 delete history;
     ReplayPlay::destroy();
     ReplayRecorder::destroy();
-    delete ParticleKindManager::get();
-    PlayerManager::destroy();
     if(unlock_manager)          delete unlock_manager;
-    Online::ProfileManager::destroy();
     GUIEngine::DialogQueue::deallocate();
     GUIEngine::clear();
     GUIEngine::cleanUp();
@@ -2365,45 +1997,6 @@ static void cleanSuperTuxKart()
     // was deleted (in cleanUserConfig below), but before STK finishes and
     // the OS takes all threads down.
 
-#ifndef SERVER_ONLY
-    if (!ProfileWorld::isNoGraphics())
-    {
-        if (UserConfigParams::m_internet_status == Online::RequestManager::
-            IPERM_ALLOWED && !NewsManager::get()->waitForReadyToDeleted(2.0f))
-        {
-            Log::info("Thread", "News manager not stopping, exiting anyway.");
-        }
-        NewsManager::deallocate();
-    }
-#endif
-
-    if (Online::RequestManager::get()->waitForReadyToDeleted(5.0f))
-    {
-        Online::RequestManager::deallocate();
-    }
-    else
-    {
-        Log::warn("Thread", "Request Manager not aborting in time, proceeding without cleanup.");
-    }
-
-    if (!SFXManager::get()->waitForReadyToDeleted(2.0f))
-    {
-        Log::info("Thread", "SFXManager not stopping, exiting anyway.");
-    }
-    SFXManager::destroy();
-
-    // Music manager can not be deleted before the SFX thread is stopped
-    // (since SFX commands can contain music information, which are
-    // deleted by the music manager).
-    delete music_manager;
-
-    // The add-ons manager might still be called from a currenty running request
-    // in the request manager, so it can not be deleted earlier.
-#ifndef SERVER_ONLY
-    if(addons_manager)  delete addons_manager;
-#endif
-
-    ServersManager::deallocate();
     cleanUserConfig();
 
     StateManager::deallocate();

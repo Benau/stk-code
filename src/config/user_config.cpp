@@ -731,6 +731,7 @@ bool UserConfig::loadConfig()
 /** Write settings to config file. */
 void UserConfig::saveConfig()
 {
+    return;
     const std::string filename = file_manager->getUserConfigFile(m_filename);
     std::stringstream ss;
     ss << "<?xml version=\"1.0\"?>\n";

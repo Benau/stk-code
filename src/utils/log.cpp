@@ -294,23 +294,12 @@ void Log::flushBuffers()
  */
 void Log::openOutputFiles(const std::string &logout)
 {
-    m_file_stdout = FileUtils::fopenU8Path(logout, "w");
-    if (!m_file_stdout)
-    {
-        Log::error("main", "Can not open log file '%s'. Writing to "
-                           "stdout instead.", logout.c_str());
-    }
-    else
-    {
-        // Disable buffering so that messages are seen asap
-        setvbuf(m_file_stdout, NULL, _IONBF, 0);
-    }
+    m_file_stdout = NULL;
 } // closeOutputFiles
 
 // ----------------------------------------------------------------------------
 /** Function to close output files */
 void Log::closeOutputFiles()
 {
-    fclose(m_file_stdout);
 } // closeOutputFiles
 

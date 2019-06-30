@@ -275,11 +275,11 @@ bool DeviceManager::getConfigForGamepad(const int irr_id,
                                          m_irrlicht_gamepads[irr_id].Buttons );
         }
 #ifdef ENABLE_WIIUSE
-        else    // Wiimotes have a higher ID and do not refer to m_irrlicht_gamepads
+        /*else    // Wiimotes have a higher ID and do not refer to m_irrlicht_gamepads
         {
             // The Wiimote manager will set number of buttons and axis
             *config = new GamepadConfig(name.c_str());
-        }
+        }*/
 #endif
 
         // Add new config to list
@@ -631,6 +631,7 @@ bool DeviceManager::load()
 // -----------------------------------------------------------------------------
 void DeviceManager::save()
 {
+    return;
     static std::string filepath = file_manager->getUserConfigFile(INPUT_FILE_NAME);
     if(UserConfigParams::logMisc()) Log::info("Device manager","Serializing input.xml...");
 

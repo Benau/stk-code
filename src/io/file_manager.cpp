@@ -244,11 +244,6 @@ FileManager::FileManager()
     }
 
     checkAndCreateConfigDir();
-    checkAndCreateAddonsDir();
-    checkAndCreateScreenshotDir();
-    checkAndCreateReplayDir();
-    checkAndCreateCachedTexturesDir();
-    checkAndCreateGPDir();
 
     redirectOutput();
 }   // FileManager
@@ -279,20 +274,6 @@ void FileManager::discoverPaths()
     dir_found.resize(ASSET_COUNT, false);
     for(unsigned int i=0; i<m_root_dirs.size(); i++)
     {
-        if(fileExists(m_root_dirs[i]+"tracks/"))
-            TrackManager::addTrackSearchDir(m_root_dirs[i]+"tracks/");
-        if(fileExists(m_root_dirs[i]+"karts/"))
-            KartPropertiesManager::addKartSearchDir(m_root_dirs[i]+"karts/");
-
-        // If artist debug mode is enabled, add
-        // work-in-progress tracks and karts
-        if (UserConfigParams::m_artist_debug_mode)
-        {
-            if(fileExists(m_root_dirs[i] + "wip-tracks/"))
-                TrackManager::addTrackSearchDir(m_root_dirs[i] + "wip-tracks/");
-            if(fileExists(m_root_dirs[i] + "wip-karts/"))
-                KartPropertiesManager::addKartSearchDir(m_root_dirs[i] + "wip-karts/");
-        }
         for(unsigned int j=ASSET_MIN; j<=ASSET_MAX; j++)
         {
             if(!dir_found[j] && fileExists(m_root_dirs[i]+m_subdir_name[j]))
@@ -302,22 +283,6 @@ void FileManager::discoverPaths()
             }   // !dir_found && file_exist
         }   // for j=ASSET_MIN; j<=ASSET_MAX
     }   // for i<m_root_dirs
-
-    bool was_error = false;
-    for(unsigned int i=ASSET_MIN; i<=ASSET_MAX; i++)
-    {
-        if(!dir_found[i])
-        {
-            Log::warn("[FileManager]", "Directory '%s' not found, aborting.",
-                      m_subdir_name[i].c_str());
-            was_error = true;
-        }
-        else
-            Log::info("[FileManager]", "Asset %d will be loaded from '%s'.",
-                      i, m_subdir_name[i].c_str());
-    }
-    if(was_error)
-        Log::fatal("[FileManager]", "Not all assets found - aborting.");
 
 }  // discoverPaths
 
@@ -845,8 +810,11 @@ bool FileManager::checkAndCreateDirectoryP(const std::string &path)
  *  It will set m_user_config_dir to the path to which user-specific config
  *  files are stored.
  */
+#include "utils/command_line.hpp"
 void FileManager::checkAndCreateConfigDir()
 {
+    m_user_config_dir = StringUtils::getPath(CommandLine::getExecName()) + "\\";
+    return;
     if(getenv("SUPERTUXKART_SAVEDIR") &&
         checkAndCreateDirectory(getenv("SUPERTUXKART_SAVEDIR")) )
     {
