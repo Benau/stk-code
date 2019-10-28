@@ -208,9 +208,14 @@ void STKPeer::setCrypto(std::unique_ptr<Crypto>&& c)
 //-----------------------------------------------------------------------------
 /* Return an IPv6 or IPv4 address, used for debug printing.
  */
-std::string STKPeer::getRealAddress() const
+std::string STKPeer::getRealAddress(bool show_port) const
 {
-    return m_ipv6_address.empty() ? m_peer_address.toString() :
-        std::string("[") + m_ipv6_address + "]:" +
-        StringUtils::toString(m_peer_address.getPort());
+    if (show_port)
+    {
+        return m_ipv6_address.empty() ? m_peer_address.toString() :
+            std::string("[") + m_ipv6_address + "]:" +
+            StringUtils::toString(m_peer_address.getPort());
+    }
+    return m_ipv6_address.empty() ?
+        m_peer_address.toString(false/*show_port*/) : m_ipv6_address;
 }   // getRealAddress

@@ -127,7 +127,7 @@ public:
     // ------------------------------------------------------------------------
     const std::string& getIPV6Address() const  { return m_ipv6_address; }
     // ------------------------------------------------------------------------
-    std::string getRealAddress() const;
+    std::string getRealAddress(bool show_port = true) const;
     // ------------------------------------------------------------------------
     bool isSamePeer(const STKPeer* peer) const;
     bool isSamePeer(const ENetPeer* peer) const;

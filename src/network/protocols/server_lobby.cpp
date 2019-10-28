@@ -3081,6 +3081,25 @@ void ServerLobby::connectionRequested(Event* event)
     bool duplicated_ranked_player =
         all_online_ids.find(online_id) != all_online_ids.end();
 
+    // No duplicated ip to prevent ranking cheating
+    bool duplicated_ip = false;
+    if (ServerConfig::m_ranked)
+    {
+        const std::string& peer_addr_str =
+            peer->getRealAddress(false/*show_port*/);
+        auto peers = STKHost::get()->getPeers();
+        for (auto& p : peers)
+        {
+            if (p == peer)
+                continue;
+            if (p->getRealAddress(false/*show_port*/) == peer_addr_str)
+            {
+                duplicated_ip = true;
+                break;
+            }
+        }
+    }
+
     if (((encrypted_size == 0 || online_id == 0) &&
         !(peer->getAddress().isPublicAddressLocalhost() ||
         peer->getAddress().isLAN()) &&
@@ -3091,7 +3110,8 @@ void ServerLobby::connectionRequested(Event* event)
         (peer->isAIPeer() && !peer->getAddress().isLAN()) ||
         (peer->isAIPeer() &&
         ServerConfig::m_ai_handling && !m_ai_peer.expired()) ||
-        (peer->isAIPeer() && m_game_setup->isGrandPrix()))
+        (peer->isAIPeer() && m_game_setup->isGrandPrix()) ||
+        (ServerConfig::m_ranked && duplicated_ip))
     {
         NetworkString* message = getNetworkString(2);
         message->setSynchronous(true);
