@@ -22,11 +22,7 @@
 // moving screen
 std::atomic<int> g_keyboard_height(0);
 
-#define MAKE_ANDROID_SAVE_KBD_HEIGHT_CALLBACK(x) JNIEXPORT void JNICALL Java_ ## x##_SuperTuxKartActivity_saveKeyboardHeight(JNIEnv* env, jobject this_obj, jint height)
-#define ANDROID_SAVE_KBD_HEIGHT_CALLBACK(PKG_NAME) MAKE_ANDROID_SAVE_KBD_HEIGHT_CALLBACK(PKG_NAME)
-
-extern "C"
-ANDROID_SAVE_KBD_HEIGHT_CALLBACK(ANDROID_PACKAGE_CALLBACK_NAME)
+extern "C" JNIEXPORT void JNICALL jni_saveKeyboardHeight(JNIEnv* env, jobject this_obj, jint height)
 {
     g_keyboard_height.store((int)height);
 }
@@ -99,19 +95,11 @@ CIrrDeviceAndroid::CIrrDeviceAndroid(const SIrrlichtCreationParameters& param)
 
     if (Android != NULL)
     {
+        // We already attach the jni thread before starting android_main
         jint status = Android->activity->vm->GetEnv((void**)&m_jni_env, JNI_VERSION_1_6);
-        if (status == JNI_EDETACHED)
-        {
-            JavaVMAttachArgs args;
-            args.version = JNI_VERSION_1_6;
-            args.name = "NativeThread";
-            args.group = NULL;
-
-            status = Android->activity->vm->AttachCurrentThread(&m_jni_env, &args);
-        }
         if (status != JNI_OK)
         {
-            os::Printer::log("Failed to attach jni thread.", ELL_DEBUG);
+            os::Printer::log("Failed to get jni env.", ELL_DEBUG);
             return;
         }
 
@@ -178,7 +166,6 @@ CIrrDeviceAndroid::~CIrrDeviceAndroid()
         Android->userData = NULL;
         Android->onAppCmd = NULL;
         Android->onInputEvent = NULL;
-        Android->activity->vm->DetachCurrentThread();
     }
 }
 

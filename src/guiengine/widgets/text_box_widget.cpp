@@ -253,15 +253,9 @@ EventPropagation TextBoxWidget::leftPressed (const int playerID)
 #ifdef ANDROID
 #include "jni.h"
 
-#if !defined(ANDROID_PACKAGE_CALLBACK_NAME)
-    #error
-#endif
-
-#define MAKE_EDITTEXT_CALLBACK(x) JNIEXPORT void JNICALL Java_ ## x##_STKEditText_editText2STKEditbox(JNIEnv* env, jobject this_obj, jint widget_id, jstring text, jint start, jint end, jint composing_start, jint composing_end)
-#define ANDROID_EDITTEXT_CALLBACK(PKG_NAME) MAKE_EDITTEXT_CALLBACK(PKG_NAME)
-
-extern "C"
-ANDROID_EDITTEXT_CALLBACK(ANDROID_PACKAGE_CALLBACK_NAME)
+extern "C" JNIEXPORT void JNICALL jni_editText2STKEditbox(JNIEnv* env,
+    jobject this_obj, jint widget_id, jstring text, jint start, jint end,
+    jint composing_start, jint composing_end)
 {
     if (text == NULL)
         return;
@@ -330,11 +324,8 @@ ANDROID_EDITTEXT_CALLBACK(ANDROID_PACKAGE_CALLBACK_NAME)
         });
 }
 
-#define MAKE_HANDLE_ACTION_NEXT_CALLBACK(x) JNIEXPORT void JNICALL Java_ ## x##_STKEditText_handleActionNext(JNIEnv* env, jobject this_obj, jint widget_id)
-#define ANDROID_HANDLE_ACTION_NEXT_CALLBACK(PKG_NAME) MAKE_HANDLE_ACTION_NEXT_CALLBACK(PKG_NAME)
-
-extern "C"
-ANDROID_HANDLE_ACTION_NEXT_CALLBACK(ANDROID_PACKAGE_CALLBACK_NAME)
+extern "C" JNIEXPORT void JNICALL jni_handleActionNext(JNIEnv* env,
+    jobject this_obj, jint widget_id)
 {
     GUIEngine::addGUIFunctionBeforeRendering([widget_id]()
         {

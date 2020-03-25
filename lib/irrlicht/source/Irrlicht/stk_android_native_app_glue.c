@@ -19,6 +19,8 @@
 #include <jni.h>
 
 #include <errno.h>
+#include <dlfcn.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -36,6 +38,8 @@
 #else
 #  define LOGV(...)  ((void)0)
 #endif
+
+extern void start_stk(struct android_app* app);
 
 static void free_saved_state(struct android_app* android_app) {
     pthread_mutex_lock(&android_app->mutex);
@@ -206,8 +210,25 @@ static void process_cmd(struct android_app* app, struct android_poll_source* sou
     android_app_post_exec_cmd(app, cmd);
 }
 
+void (*g_android_main)(struct android_app* app);
+void* g_dl_handle;
+
 static void* android_app_entry(void* param) {
     struct android_app* android_app = (struct android_app*)param;
+
+    // This is now in stk thread, attach jvm now
+    JNIEnv* env = NULL;
+    JavaVMAttachArgs args;
+    args.version = JNI_VERSION_1_6;
+    args.name = "NativeThread";
+    args.group = NULL;
+    JavaVM* vm = android_app->activity->vm;
+    jint status = (*vm)->AttachCurrentThread(vm, &env, &args);
+    if (status != JNI_OK)
+    {
+        LOGE("Failed to attach jni thread.");
+        return NULL;
+    }
 
     android_app->config = AConfiguration_new();
     AConfiguration_fromAssetManager(android_app->config, android_app->activity->assetManager);
@@ -231,9 +252,12 @@ static void* android_app_entry(void* param) {
     pthread_cond_broadcast(&android_app->cond);
     pthread_mutex_unlock(&android_app->mutex);
 
-    android_main(android_app);
+    g_android_main(android_app);
 
+    (*vm)->DetachCurrentThread(vm);
     android_app_destroy(android_app);
+    dlclose(g_dl_handle);
+    g_dl_handle = NULL;
     return NULL;
 }
 
@@ -263,18 +287,6 @@ static struct android_app* android_app_create(ANativeActivity* activity,
     }
     android_app->msgread = msgpipe[0];
     android_app->msgwrite = msgpipe[1];
-
-    pthread_attr_t attr; 
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    pthread_create(&android_app->thread, &attr, android_app_entry, android_app);
-
-    // Wait for thread to start.
-    pthread_mutex_lock(&android_app->mutex);
-    while (!android_app->running) {
-        pthread_cond_wait(&android_app->cond, &android_app->mutex);
-    }
-    pthread_mutex_unlock(&android_app->mutex);
 
     return android_app;
 }
@@ -444,6 +456,67 @@ static void onInputQueueDestroyed(ANativeActivity* activity, AInputQueue* queue)
     android_app_set_input(app, NULL);
 }
 
+// For startSTK before onCreate in SuperTuxKartActivity
+struct android_app* g_android_app;
+
+void initSTK(ANativeActivity* app)
+{
+    JNIEnv* jenv = app->env;
+    jclass contextClass = (*jenv)->GetObjectClass(jenv, app->clazz);
+    jmethodID getApplicationContextMethod =
+        (*jenv)->GetMethodID(jenv, contextClass, "getApplicationContext", "()Landroid/content/Context;");
+    jobject contextObject =
+        (*jenv)->CallObjectMethod(jenv, app->clazz, getApplicationContextMethod);
+    jmethodID getApplicationInfoMethod = (*jenv)->GetMethodID(jenv,
+        contextClass, "getApplicationInfo", "()Landroid/content/pm/ApplicationInfo;");
+    jobject applicationInfoObject =
+        (*jenv)->CallObjectMethod(jenv, contextObject, getApplicationInfoMethod);
+    jfieldID nativeLibraryDirField = (*jenv)->GetFieldID(jenv,
+        (*jenv)->GetObjectClass(jenv, applicationInfoObject), "nativeLibraryDir", "Ljava/lang/String;");
+    jobject nativeLibraryDirObject =
+        (*jenv)->GetObjectField(jenv, applicationInfoObject, nativeLibraryDirField);
+    jmethodID getBytesMethod = (*jenv)->GetMethodID(jenv,
+        (*jenv)->GetObjectClass(jenv, nativeLibraryDirObject), "getBytes", "(Ljava/lang/String;)[B");
+    jbyteArray bytesObject = (jbyteArray)((*jenv)->CallObjectMethod(jenv,
+        nativeLibraryDirObject, getBytesMethod, (*jenv)->NewStringUTF(jenv, "UTF-8")));
+    size_t length = (*jenv)->GetArrayLength(jenv, bytesObject);
+    jbyte* bytes = (*jenv)->GetByteArrayElements(jenv, bytesObject, NULL);
+    const char* stkso = "/libstk.so";
+    size_t stkso_len = strlen(stkso);
+    char* path = calloc(length + stkso_len + 1, 1);
+    if (!path)
+        return;
+    memcpy(path, bytes, length);
+    memcpy(path + length, stkso, stkso_len);
+    // Clear all error first
+    char* err = dlerror();
+    g_dl_handle = NULL;
+    g_dl_handle = dlopen(path, RTLD_NOW);
+    err = dlerror();
+    if (!g_dl_handle)
+    {
+        // For android app bundle the libstk.so is compressed, we just need to
+        // use relative path to get it
+        g_dl_handle = dlopen("libstk.so", RTLD_NOW);
+        err = dlerror();
+    }
+    if (!g_dl_handle)
+    {
+        LOGE("Failed to load libstk.so, exiting");
+        exit(0);
+    }
+    free(path);
+    g_android_main = (void(*)(struct android_app*))dlsym(g_dl_handle, "android_main");
+    err = dlerror();
+    if (err)
+        LOGE("%s", err);
+    if (!g_android_main)
+    {
+        LOGE("Failed to load android_main from libstk.so, exiting");
+        exit(0);
+    }
+}
+
 void ANativeActivity_onCreate(ANativeActivity* activity,
         void* savedState, size_t savedStateSize) {
     LOGV("Creating: %p\n", activity);
@@ -462,4 +535,84 @@ void ANativeActivity_onCreate(ANativeActivity* activity,
     activity->callbacks->onInputQueueDestroyed = onInputQueueDestroyed;
 
     activity->instance = android_app_create(activity, savedState, savedStateSize);
+    g_android_app = activity->instance;
+    initSTK(activity);
+}
+
+// From SDL
+#define arraysize(array)    (sizeof(array)/sizeof(array[0]))
+static void
+register_methods(JNIEnv *env, const char *classname, JNINativeMethod *methods, int nb)
+{
+    jclass clazz = (*env)->FindClass(env, classname);
+    if (clazz == NULL || (*env)->RegisterNatives(env, clazz, methods, nb) < 0)
+    {
+        __android_log_print(ANDROID_LOG_ERROR, "SuperTuxKart", "Failed to register methods of %s", classname);
+        return;
+    }
+}
+
+#if !defined(ANDROID_PACKAGE_CLASS_NAME)
+    #error
+#endif
+#define QUOTE(name) #name
+#define STR(macro) QUOTE(macro)
+// Called by loadLibrary after onCreate, get all required function pointer used in STK
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved)
+{
+    // Called when System.loadLibrary("main") in SuperTuxKartActivity
+    JNIEnv* env = NULL;
+    if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK)
+    {
+        __android_log_print(ANDROID_LOG_ERROR, "SuperTuxKart", "Failed to get JNI Env");
+        exit(0);
+    }
+
+    JNINativeMethod* methods = malloc(sizeof(JNINativeMethod) * 2);
+    if (!methods)
+        exit(0);
+
+    char activity_class[100];
+    memset(activity_class, 0, 100);
+    snprintf(activity_class, 100, "%s%s", STR(ANDROID_PACKAGE_CLASS_NAME), "SuperTuxKartActivity");
+    memset(methods, 0, sizeof(JNINativeMethod) * 2);
+    methods[0].name = "saveKeyboardHeight";
+    methods[0].signature = "(I)V";
+    methods[0].fnPtr = dlsym(g_dl_handle, "jni_saveKeyboardHeight");
+    register_methods(env, activity_class, methods, 1);
+
+    memset(activity_class, 0, 100);
+    snprintf(activity_class, 100, "%s%s", STR(ANDROID_PACKAGE_CLASS_NAME), "STKEditText");
+    memset(methods, 0, sizeof(JNINativeMethod) * 2);
+    methods[0].name = "editText2STKEditbox";
+    methods[0].signature = "(ILjava/lang/String;IIII)V";
+    methods[0].fnPtr = dlsym(g_dl_handle, "jni_editText2STKEditbox");
+    methods[1].name = "handleActionNext";
+    methods[1].signature = "(I)V";
+    methods[1].fnPtr = dlsym(g_dl_handle, "jni_handleActionNext");
+
+    register_methods(env, activity_class, methods, 2);
+
+    free(methods);
+    return JNI_VERSION_1_6;
+}
+
+#define MAKE_ANDROID_START_STK_CALLBACK(x) JNIEXPORT void JNICALL Java_ ## x##_SuperTuxKartActivity_startSTK(JNIEnv* env, jobject this_obj)
+#define ANDROID_START_STK_CALLBACK(PKG_NAME) MAKE_ANDROID_START_STK_CALLBACK(PKG_NAME)
+
+ANDROID_START_STK_CALLBACK(ANDROID_PACKAGE_CALLBACK_NAME)
+{
+    // This will be called after ANativeActivity_onCreate
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_create(&g_android_app->thread, &attr, android_app_entry, g_android_app);
+
+    // Wait for thread to start.
+    pthread_mutex_lock(&g_android_app->mutex);
+    while (!g_android_app->running)
+    {
+        pthread_cond_wait(&g_android_app->cond, &g_android_app->mutex);
+    }
+    pthread_mutex_unlock(&g_android_app->mutex);
 }

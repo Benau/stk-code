@@ -340,12 +340,6 @@ void android_app_post_exec_cmd(struct android_app* android_app, int8_t cmd);
  */
 void app_dummy();
 
-/**
- * This is the function that application code must implement, representing
- * the main entry to the app.
- */
-extern void android_main(struct android_app* app);
-
 #ifdef __cplusplus
 }
 #endif

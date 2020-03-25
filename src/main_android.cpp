@@ -180,7 +180,7 @@ void getConfigForDevice(const char* dev)
 #endif
 
 #ifdef ANDROID
-void android_main(struct android_app* app) 
+extern "C" void android_main(struct android_app* app)
 {
     Log::info("AndroidMain", "Loading application...");
         
@@ -190,20 +190,12 @@ void android_main(struct android_app* app)
     // Initialize global Android window state variables
     CIrrDeviceAndroid::onCreate();
     
-    app_dummy();
     override_default_params_for_mobile();
 
     main(0, {});
 
     Log::info("AndroidMain", "Closing STK...");
-    
-    // TODO: Irrlicht device is properly waiting for destroy event, but
-    // some global variables are not initialized/cleared in functions and thus 
-    // its state is remembered when the window is restored. We will use exit
-    // call to make sure that all variables are cleared until a proper fix will 
-    // be done.
     fflush(NULL);
-    _exit(0);
 }
 #endif
 

@@ -1,6 +1,17 @@
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
+# Android main
+LOCAL_MODULE       := main
+LOCAL_PATH         := .
+LOCAL_SRC_FILES    := ../lib/irrlicht/source/Irrlicht/stk_android_native_app_glue.c
+LOCAL_CFLAGS       := -I../lib/irrlicht/source/Irrlicht/Android \
+                      -DANDROID_PACKAGE_CALLBACK_NAME=$(PACKAGE_CALLBACK_NAME) \
+                      -DANDROID_PACKAGE_CLASS_NAME=$(PACKAGE_CLASS_NAME)
+LOCAL_LDLIBS       := -llog -landroid
+include $(BUILD_SHARED_LIBRARY)
+include $(CLEAR_VARS)
+
 
 # OpenAL
 LOCAL_MODULE := openal
@@ -175,16 +186,13 @@ include $(CLEAR_VARS)
 LOCAL_MODULE       := irrlicht
 LOCAL_PATH         := .
 LOCAL_CPP_FEATURES += rtti
-LOCAL_SRC_FILES    := $(wildcard ../lib/irrlicht/source/Irrlicht/*.cpp)         \
-                      $(wildcard ../lib/irrlicht/source/Irrlicht/Android/*.cpp) \
-                      ../lib/irrlicht/source/Irrlicht/stk_android_native_app_glue.c
+LOCAL_SRC_FILES    := $(wildcard ../lib/irrlicht/source/Irrlicht/*.cpp)
 LOCAL_CFLAGS       := -I../lib/irrlicht/source/Irrlicht/ \
                       -I../lib/irrlicht/include/         \
                       -I../src                           \
                       -Iobj/jpeglib/                     \
                       -Iobj/libpng/                      \
-                      -Iobj/zlib/                        \
-                      -DANDROID_PACKAGE_CALLBACK_NAME=$(PACKAGE_CALLBACK_NAME)
+                      -Iobj/zlib/
 LOCAL_CPPFLAGS     := -std=gnu++0x
 LOCAL_STATIC_LIBRARIES := jpeglib png zlib
 include $(BUILD_STATIC_LIBRARY)
@@ -192,7 +200,7 @@ include $(CLEAR_VARS)
 
 
 # STK
-LOCAL_MODULE       := main
+LOCAL_MODULE       := stk
 LOCAL_PATH         := .
 LOCAL_CPP_FEATURES += rtti exceptions
 LOCAL_SRC_FILES    := $(wildcard ../src/*.cpp)     \
@@ -225,8 +233,7 @@ LOCAL_CFLAGS       := -I../lib/angelscript/include      \
                       -DNDEBUG         \
                       -DANDROID_PACKAGE_NAME=\"$(PACKAGE_NAME)\"    \
                       -DANDROID_APP_DIR_NAME=\"$(APP_DIR_NAME)\"    \
-                      -DSUPERTUXKART_VERSION=\"$(PROJECT_VERSION)\" \
-                      -DANDROID_PACKAGE_CALLBACK_NAME=$(PACKAGE_CALLBACK_NAME)
+                      -DSUPERTUXKART_VERSION=\"$(PROJECT_VERSION)\"
 LOCAL_CPPFLAGS     := -std=gnu++0x
 
 LOCAL_STATIC_LIBRARIES := irrlicht bullet enet ifaddrs angelscript mcpp \

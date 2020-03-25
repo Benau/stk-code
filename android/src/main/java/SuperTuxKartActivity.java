@@ -30,9 +30,10 @@ import org.minidns.record.TXT;
 public class SuperTuxKartActivity extends NativeActivity
 {
     private STKEditText m_stk_edittext;
-
     // ------------------------------------------------------------------------
     private native void saveKeyboardHeight(int height);
+    // ------------------------------------------------------------------------
+    private native void startSTK();
     // ------------------------------------------------------------------------
     private void hideKeyboardNative(final boolean clear_text)
     {
@@ -124,6 +125,9 @@ public class SuperTuxKartActivity extends NativeActivity
                         hideNavBar(decor_view);
                 }
             });
+        // libstk.so will be ready by now after we load all required symbol in
+        // JNI_OnLoad
+        startSTK();
     }
     // ------------------------------------------------------------------------
     @Override
