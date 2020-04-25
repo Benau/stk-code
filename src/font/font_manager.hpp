@@ -37,6 +37,8 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+#include "SColor.h"
+#include "position2d.h"
 #include "irrString.h"
 #include "GlyphLayout.h"
 #endif
@@ -139,6 +141,10 @@ public:
     void initGlyphLayouts(const irr::core::stringw& text,
                           std::vector<irr::gui::GlyphLayout>& gls,
                           std::vector<std::u32string>* line_data = NULL);
+    // ------------------------------------------------------------------------
+    void drawDigitText(const std::string& text,
+                       const irr::core::position2df& pos, unsigned dpi,
+                       bool black_border, irr::video::SColor color);
 #endif
     // ------------------------------------------------------------------------
     void loadFonts();

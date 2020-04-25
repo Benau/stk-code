@@ -22,7 +22,10 @@
 #include "font/bold_face.hpp"
 #include "font/digit_face.hpp"
 #include "font/face_ttf.hpp"
+#include "font/font_drawer.hpp"
 #include "font/regular_face.hpp"
+#include "graphics/central_settings.hpp"
+#include "graphics/irr_driver.hpp"
 #include "guiengine/engine.hpp"
 #include "guiengine/skin.hpp"
 #include "states_screens/state_manager.hpp"
@@ -75,6 +78,237 @@ FontManager::~FontManager()
 }   // ~FontManager
 
 #ifndef SERVER_ONLY
+/** Basic texture class for drawDigitText */
+class QuickTexture : public video::ITexture
+{
+private:
+    GLuint m_texture_name;
+
+    core::dimension2d<u32> m_size;
+public:
+    // ------------------------------------------------------------------------
+    QuickTexture(unsigned w, unsigned h, uint8_t* data) : video::ITexture("")
+    {
+        glGenTextures(1, &m_texture_name);
+        glBindTexture(GL_TEXTURE_2D, m_texture_name);
+        m_size = core::dimension2du(w, h);
+        unsigned int internal_format = GL_RGBA8;
+        // GLES 2.0 specs doesn't allow GL_RGBA8 internal format
+#if defined(USE_GLES2)
+        if (!CVS->isGLSL())
+            internal_format = GL_RGBA;
+#endif
+        glTexImage2D(GL_TEXTURE_2D, 0, internal_format, w, h, 0, GL_RGBA,
+            GL_UNSIGNED_BYTE, data);
+        if (hasMipMaps())
+            glGenerateMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+    // ------------------------------------------------------------------------
+    virtual ~QuickTexture()
+    {
+        glDeleteTextures(1, &m_texture_name);
+    }
+    // ------------------------------------------------------------------------
+    virtual void* lock(video::E_TEXTURE_LOCK_MODE mode =
+                       video::ETLM_READ_WRITE, u32 mipmap_level = 0)
+                                                               { return NULL; }
+    // ------------------------------------------------------------------------
+    virtual void unlock()                                                    {}
+    // ------------------------------------------------------------------------
+    virtual const core::dimension2d<u32>& getOriginalSize() const
+                                                             { return m_size; }
+    // ------------------------------------------------------------------------
+    virtual const core::dimension2d<u32>& getSize() const    { return m_size; }
+    // ------------------------------------------------------------------------
+    virtual video::E_DRIVER_TYPE getDriverType() const
+    {
+#if defined(USE_GLES2)
+        return video::EDT_OGLES2;
+#else
+        return video::EDT_OPENGL;
+#endif
+    }
+    // ------------------------------------------------------------------------
+    virtual video::ECOLOR_FORMAT getColorFormat() const
+                                                { return video::ECF_A8R8G8B8; }
+    // ------------------------------------------------------------------------
+    virtual u32 getPitch() const                                  { return 0; }
+    // ------------------------------------------------------------------------
+    virtual bool hasMipMaps() const
+    {
+#if defined(USE_GLES2)
+        return true;
+#elif defined(SERVER_ONLY)
+        return false;
+#else
+        return CVS->getGLSLVersion() >= 130;
+#endif   // !SERVER_ONLY
+    }
+    // ------------------------------------------------------------------------
+    virtual void regenerateMipMapLevels(void* mipmap_data = NULL)            {}
+    // ------------------------------------------------------------------------
+    virtual u32 getOpenGLTextureName() const         { return m_texture_name; }
+    // ------------------------------------------------------------------------
+    virtual unsigned int getTextureSize() const                   { return 0; }
+};   // QuickTexture
+
+// ----------------------------------------------------------------------------
+/** Draw any text with \ref m_digit_face with any size, it will be rendered
+ *  with freetype live so it can avoid the bad scaling effect.
+ *  \param text Text to be drawn.
+ *  \param pos Drawn position, this is calculated at the text bottom line.
+ *  \param dpi Size for FT_Set_Pixel_Sizes.
+ *  \param black_border True if black border should be drawn.
+ *  \param color Color for drawing.
+ */
+void FontManager::drawDigitText(const std::string& text,
+                                const core::position2df& pos, unsigned dpi,
+                                bool black_border, irr::video::SColor color)
+{
+    // To next power of 2
+    int h = dpi;
+    h--;
+    h |= h >> 1;
+    h |= h >> 2;
+    h |= h >> 4;
+    h |= h >> 8;
+    h |= h >> 16;
+    h++;
+
+    int w = int(h * text.size());
+    // Prevent too wide texture
+    if (w > 2048)
+        w = 2048;
+    video::IImage* glyph = NULL;
+    uint8_t* glyph_data = NULL;
+    GLuint pbo = 0;
+#ifdef USE_GLES2
+    if (CVS->isGLSL())
+    {
+        glGenBuffers(1, &pbo);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, w * h * 4, NULL, GL_STREAM_DRAW);
+        glyph_data = (uint8_t*)glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, w * h * 4,
+            GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+        if (!glyph_data)
+        {
+            Log::warn("FontManager", "Failed to map memory");
+            return;
+        }
+        glyph = irr_driver->getVideoDriver()->createImageFromData(
+            video::ECF_A8R8G8B8, core::dimension2du(w, h), glyph_data,
+            true/*ownForeignMemory*/, false/*deleteMemory*/);
+    }
+    else
+    {
+        glyph = irr_driver->getVideoDriver()->createImage(
+            video::ECF_A8R8G8B8, core::dimension2du(w, h));
+        glyph_data = (uint8_t*)glyph->lock();
+    }
+#else
+    glGenBuffers(1, &pbo);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
+    glBufferData(GL_PIXEL_UNPACK_BUFFER, w * h * 4, NULL, GL_STREAM_DRAW);
+    glyph_data = (uint8_t*)glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
+    if (!glyph_data)
+    {
+        Log::warn("FontManager", "Failed to map memory");
+        return;
+    }
+    glyph = irr_driver->getVideoDriver()->createImageFromData(
+        video::ECF_A8R8G8B8, core::dimension2du(w, h), glyph_data,
+        true/*ownForeignMemory*/, false/*deleteMemory*/);
+#endif
+    memset(glyph_data, 0, w * h * 4);
+    std::vector<core::vector2di> sizes;
+    std::vector<core::vector2di> bearings;
+    std::vector<int> advances;
+    checkFTError(FT_Set_Pixel_Sizes(m_digit_face, 0, dpi),
+        "setting DPI");
+    int used_width = 0;
+    for (unsigned i = 0; i < text.size(); i++)
+    {
+        int glyph_index = FT_Get_Char_Index(m_digit_face, text[i]);
+        if (glyph_index == 0)
+        {
+            Log::warn("FontManager", "Missing character in %s for "
+                "drawDigitText, index: %d", text.c_str(), i);
+            break;
+        }
+        checkFTError(FT_Load_Glyph(m_digit_face, glyph_index,
+            FT_LOAD_DEFAULT), "loading a glyph");
+        checkFTError(FT_Render_Glyph(m_digit_face->glyph,
+            FT_RENDER_MODE_NORMAL), "rendering a glyph to bitmap");
+        FT_Bitmap* bits = &(m_digit_face->glyph->bitmap);
+        if (bits->pixel_mode != FT_PIXEL_MODE_GRAY)
+        {
+            Log::warn("FontManager", "Digit face cannot render gray texture");
+            break;
+        }
+        if (used_width + (int)bits->width > w)
+        {
+            Log::warn("FontManager", "Too width glyph in %s for "
+                "drawDigitText, index: %d", text.c_str(), i);
+            break;
+        }
+        sizes.emplace_back(bits->width, bits->rows);
+        bearings.emplace_back(m_digit_face->glyph->bitmap_left,
+            m_digit_face->glyph->bitmap_top);
+        advances.push_back(m_digit_face->glyph->advance.x >> 6);
+        unsigned pixel = 0;
+        for (unsigned j = 0; j < bits->rows; j++)
+        {
+            for (unsigned k = 0; k < bits->width; k++)
+            {
+                glyph->setPixel(used_width + k, j,
+                    video::SColor(m_digit_face->glyph->bitmap.buffer[pixel++],
+                    255, 255, 255));
+            }
+        }
+        // Reserve 1 pixel for border
+        used_width += bits->width + 1;
+    }
+
+    if (pbo != 0)
+    {
+        glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+        glyph_data = NULL;
+    }
+    QuickTexture* tex = new QuickTexture(w, h, glyph_data);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    glyph->drop();
+
+    core::position2df start = pos;
+    used_width = 0;
+    video::SColor black(color.getAlpha(), 0, 0, 0);
+    for (unsigned i = 0; i < advances.size(); i++)
+    {
+        core::rectf draw_pos;
+        draw_pos.UpperLeftCorner.X = start.X + bearings[i].X;
+        draw_pos.LowerRightCorner.X = start.X + sizes[i].X;
+        draw_pos.LowerRightCorner.Y = start.Y + (sizes[i].Y - bearings[i].Y);
+        draw_pos.UpperLeftCorner.Y = draw_pos.LowerRightCorner.Y - sizes[i].Y;
+        core::recti src(used_width, 0, used_width + sizes[i].X, sizes[i].Y);
+        int thickness = black_border ? 2 : -1;
+        for (int x_delta = -thickness; x_delta <= thickness; x_delta++)
+        {
+            for (int y_delta = -thickness; y_delta <= thickness; y_delta++)
+            {
+                if (x_delta == 0 || y_delta == 0) continue;
+                FontDrawer::addGlyph(tex, draw_pos + core::position2d<float>
+                    (float(x_delta), float(y_delta)), src, NULL,
+                    black);
+            }
+        }
+        FontDrawer::addGlyph(tex, draw_pos, src, NULL, color);
+        start.X += advances[i];
+        used_width += sizes[i].X + 1;
+    }
+    tex->drop();
+    FontDrawer::draw();
+}   // drawDigitText
+
 // ----------------------------------------------------------------------------
 /** Load all TTFs from a list to m_faces.
  *  \param ttf_list List of TTFs to be loaded.
