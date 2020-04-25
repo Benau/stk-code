@@ -31,6 +31,7 @@ using namespace irr;
 #include "graphics/camera.hpp"
 #include "graphics/2dutils.hpp"
 #ifndef SERVER_ONLY
+#include "font/font_manager.hpp"
 #include "graphics/glwrap.hpp"
 #endif
 #include "graphics/irr_driver.hpp"
@@ -862,6 +863,7 @@ void RaceGUI::drawRank(const AbstractKart *kart,
                       float min_ratio, int meter_width,
                       int meter_height, float dt)
 {
+#ifndef SERVER_ONLY
     static video::SColor color = video::SColor(255, 255, 255, 255);
 
     // Draw rank
@@ -917,23 +919,16 @@ void RaceGUI::drawRank(const AbstractKart *kart,
         m_last_ranks[id] = kart->getPosition();
     }
 
-    gui::ScalableFont* font = GUIEngine::getHighresDigitFont();
-    
-    int font_height = font->getDimension(L"X").Height;
-    font->setScale((float)meter_height / font_height * 0.4f * scale);
     std::ostringstream oss;
     oss << rank; // the current font has no . :(   << ".";
-
-    core::recti pos;
-    pos.LowerRightCorner = core::vector2di(int(offset.X + 0.64f*meter_width),
-                                           int(offset.Y - 0.49f*meter_height));
-    pos.UpperLeftCorner = core::vector2di(int(offset.X + 0.64f*meter_width),
-                                          int(offset.Y - 0.49f*meter_height));
-
-    font->setBlackBorder(true);
-    font->draw(oss.str().c_str(), pos, color, true, true);
-    font->setBlackBorder(false);
-    font->setScale(1.0f);
+    core::position2df pos(
+        offset.X + (rank >= 10 ? 0.425f : 0.525f) * meter_width,
+        offset.Y - meter_height * 0.4f);
+    pos.X += pos.X * ((1.0f - scale) * 0.008f * min_ratio);
+    pos.Y -= pos.Y * ((1.0f - scale) * 0.008f * min_ratio);
+    font_manager->drawDigitText(oss.str(), pos, meter_height / 3.0f * scale,
+        true/*black_border*/, color);
+#endif
 }   // drawRank
 
 //-----------------------------------------------------------------------------
