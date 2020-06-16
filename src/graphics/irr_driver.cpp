@@ -393,18 +393,6 @@ void IrrDriver::initDevice()
         video::IVideoModeList* modes = m_device->getVideoModeList();
         const core::dimension2d<u32> ssize = modes->getDesktopResolution();
 
-        if (ssize.Width < 1 || ssize.Height < 1)
-        {
-            Log::warn("irr_driver", "Unknown desktop resolution.");
-        }
-        else if (UserConfigParams::m_width > (int)ssize.Width ||
-                 UserConfigParams::m_height > (int)ssize.Height)
-        {
-            Log::warn("irr_driver", "The window size specified in "
-                      "user config is larger than your screen!");
-            UserConfigParams::m_width = (int)ssize.Width;
-            UserConfigParams::m_height = (int)ssize.Height;
-        }
 
         if (UserConfigParams::m_fullscreen)
         {

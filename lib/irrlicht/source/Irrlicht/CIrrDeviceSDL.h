@@ -120,17 +120,17 @@ namespace irr
 
 		virtual s32 getBottomPadding()
 		{
-			return BottomPadding * NativeScale;
+			return 21 * 3;
 		}
 
 		virtual s32 getLeftPadding()
 		{
-			return LeftPadding * NativeScale;
+			return 44 * 3;
 		}
 
 		virtual s32 getRightPadding()
 		{
-			return RightPadding * NativeScale;
+			return 44 * 3;
 		}
 
 		virtual f32 getNativeScale() const { return NativeScale; }
