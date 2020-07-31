@@ -51,7 +51,13 @@ static void DetermineBidiTypes(const SBCodepointSequence *sequence, SBBidiType *
     SBCodepoint codepoint;
 
     while ((codepoint = SBCodepointSequenceGetCodepointAt(sequence, &stringIndex)) != SBCodepointInvalid) {
-        types[firstIndex] = LookupBidiType(codepoint);
+        if ((codepoint >= 0x4E00 && codepoint <= 0x9FFF) ||
+            (codepoint >= 0x3400 && codepoint <= 0x4DBF) ||
+            (codepoint >= 0xF900 && codepoint <= 0xFAFF) || // CJK
+            (codepoint >= 0xAC00 && codepoint <= 0xD7A3)) // Hangul
+            types[firstIndex] = SBBidiTypeL;
+        else
+            types[firstIndex] = LookupBidiType(codepoint);
 
         /* Subsequent code units get 'BN' type. */
         while (++firstIndex < stringIndex) {
