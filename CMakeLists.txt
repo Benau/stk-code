@@ -1,13 +1,42 @@
-cmake_minimum_required(VERSION 2.8.4)
+cmake_minimum_required(VERSION 3.2)
+
+get_cmake_property(variables CACHE_VARIABLES)
+# For BuildSTKDeps cross compiling, we specific toolchain file in command line
+foreach(variable_name ${variables})
+    set(variable "${${variable_name}}")
+    # Common variable needed for cross-compiling
+    if(("${variable_name}" STREQUAL "CMAKE_TOOLCHAIN_FILE" OR
+       "${variable_name}" STREQUAL "CMAKE_C_FLAGS" OR
+       "${variable_name}" STREQUAL "CMAKE_CXX_FLAGS" OR
+       "${variable_name}" STREQUAL "CMAKE_EXE_LINKER_FLAGS" OR
+       "${variable_name}" STREQUAL "CMAKE_C_COMPILER" OR
+       "${variable_name}" STREQUAL "CMAKE_CXX_COMPILER" OR
+       "${variable_name}" STREQUAL "CMAKE_OSX_DEPLOYMENT_TARGET" OR
+       "${variable_name}" STREQUAL "CMAKE_BUILD_TYPE" OR
+       "${variable_name}" STREQUAL "CCTOOLS_PREFIX" OR
+       "${variable_name}" STREQUAL "RT" OR
+       "${variable_name}" STREQUAL "LLVM_PREFIX") AND NOT variable STREQUAL "")
+        if ("${variable_name}" MATCHES "CMAKE_TOOLCHAIN_FILE")
+            # Convert cmake toolchain file to absolute path
+            get_filename_component(variable "${variable}" REALPATH BASE_DIR "${CMAKE_BINARY_DIR}")
+        endif()
+        list(APPEND CACHE_ARGS "-D${variable_name}=${variable}")
+    endif()
+endforeach()
 
 # root CMakeLists for the SuperTuxKart project
 project(SuperTuxKart)
 set(PROJECT_VERSION "git")
 
+# Save it for later use so if regenerate with ccmake it can be kept
+set(CROSS_ARGS "${CACHE_ARGS}" CACHE INTERNAL "")
+
 if (MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   set(LLVM_MINGW TRUE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -gcodeview")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -gcodeview")
+  # Add debug flag default for llvm mingw for pdb file
+  # Don't use RelWithDebInfo because it affects 3rd building project
+  set(CMAKE_CXX_FLAGS "-g -gcodeview")
+  set(CMAKE_C_FLAGS "-g -gcodeview")
 endif()
 
 add_definitions( -DSUPERTUXKART_VERSION="${PROJECT_VERSION}" )
@@ -28,13 +57,17 @@ endif()
 option(SERVER_ONLY "Create a server only (i.e. no graphics or sound)" OFF)
 option(CHECK_ASSETS "Check if assets are installed in ../stk-assets" ON)
 option(USE_SYSTEM_ANGELSCRIPT "Use system angelscript instead of built-in angelscript. If you enable this option, make sure to use a compatible version." OFF)
-option(USE_SYSTEM_ENET "Use system ENet instead of the built-in version, when available." ON)
 option(USE_IPV6 "Allow create or connect to game server with IPv6 address, system enet will not be used." ON)
-option(USE_SYSTEM_GLEW "Use system GLEW instead of the built-in version, when available." ON)
 option(USE_SYSTEM_WIIUSE "Use system WiiUse instead of the built-in version, when available." OFF)
 option(USE_SQLITE3 "Use sqlite to manage server stats and ban list." ON)
+option(STATIC_DEPS "Compile all STK dependencies and linked them statically. (advanced)" OFF)
+CMAKE_DEPENDENT_OPTION(USE_SYSTEM_ENET "Use system ENet instead of the built-in version, when available." OFF
+    "NOT STATIC_DEPS" ON)
+CMAKE_DEPENDENT_OPTION(USE_SYSTEM_GLEW "Use system GLEW instead of the built-in version, when available." OFF
+    "NOT STATIC_DEPS" ON)
 
-option(USE_CRYPTO_OPENSSL "Use OpenSSL instead of MbedTLS for cryptography in STK." ON)
+CMAKE_DEPENDENT_OPTION(USE_CRYPTO_OPENSSL "Use OpenSSL instead of MbedTLS for cryptography in STK." OFF
+    "NOT STATIC_DEPS" ON)
 CMAKE_DEPENDENT_OPTION(BUILD_RECORDER "Build opengl recorder" ON
     "NOT SERVER_ONLY;NOT APPLE" OFF)
 CMAKE_DEPENDENT_OPTION(USE_SYSTEM_SQUISH "Use system Squish library instead of the built-in version, when available." ON
@@ -129,19 +162,21 @@ if(WIN32)
         endif()
     endif()
 
-    if(NOT IS_DIRECTORY "${PROJECT_SOURCE_DIR}/${DEPENDENCIES}")
+    if(NOT STATIC_DEPS AND NOT IS_DIRECTORY "${PROJECT_SOURCE_DIR}/${DEPENDENCIES}")
         message(FATAL_ERROR "Dependencies directory not found.")
     endif()
 endif()
 
 # These variables enable MSVC to find libraries located in "dependencies"
 if(WIN32)
-    set(ENV{PATH} "$ENV{PATH};${PROJECT_SOURCE_DIR}/${DEPENDENCIES}/include")
-    set(ENV{LIB} ${PROJECT_SOURCE_DIR}/${DEPENDENCIES}/lib)
-    set(ENV{OPENALDIR} ${PROJECT_SOURCE_DIR}/${DEPENDENCIES})
+    if(NOT STATIC_DEPS)
+        set(ENV{PATH} "$ENV{PATH};${PROJECT_SOURCE_DIR}/${DEPENDENCIES}/include")
+        set(ENV{LIB} ${PROJECT_SOURCE_DIR}/${DEPENDENCIES}/lib)
+        set(ENV{OPENALDIR} ${PROJECT_SOURCE_DIR}/${DEPENDENCIES})
+        include_directories(${PROJECT_SOURCE_DIR}/${DEPENDENCIES}/include)
+    endif()
     add_definitions(-D_IRR_STATIC_LIB_)
     add_definitions(-DNO_IRR_COMPILE_WITH_X11_)
-    include_directories(${PROJECT_SOURCE_DIR}/${DEPENDENCIES}/include)
 endif()
 
 if(USE_GLES2)
@@ -170,6 +205,10 @@ if(UNIX AND NOT APPLE)
     if(NOT PKGCONFIG_FOUND)
         message(FATAL_ERROR "Pkg-config not found.")
     endif()
+endif()
+
+if(STATIC_DEPS)
+    include(BuildSTKDeps)
 endif()
 
 # Build the Bullet physics library
@@ -266,7 +305,7 @@ endif()
 # Libmcpp
 find_library(MCPP_LIBRARY NAMES mcpp libmcpp)
 find_path(MCPP_INCLUDEDIR NAMES mcpp_lib.h PATHS)
-if (NOT MCPP_LIBRARY OR NOT MCPP_INCLUDEDIR)
+if (STATIC_DEPS OR NOT MCPP_LIBRARY OR NOT MCPP_INCLUDEDIR)
     add_subdirectory("${PROJECT_SOURCE_DIR}/lib/mcpp")
     include_directories("${PROJECT_SOURCE_DIR}/lib/mcpp")
     SET(MCPP_LIBRARY mcpp)
@@ -367,6 +406,9 @@ if(NOT SERVER_ONLY)
     include_directories(${OGGVORBIS_INCLUDE_DIRS})
 
     add_definitions(-DENABLE_SOUND)
+    if(STATIC_DEPS)
+        add_definitions(-DAL_LIBTYPE_STATIC)
+    endif()
 endif()
 
 # Text handling in STK (We use freetype, harfbuzz and SheenBidifor i18n text handling)
@@ -567,7 +609,10 @@ endif()
 # CURL and OpenSSL or MbedTLS
 # 1.0.1d for compatible AES GCM handling
 SET(OPENSSL_MINIMUM_VERSION "1.0.1d")
-if (MSVC OR LLVM_MINGW)
+if (STATIC_DEPS)
+    set(USE_CRYPTO_OPENSSL OFF)
+    include_directories(${CURL_INCLUDE_DIRS} ${MBEDTLS_INCLUDE_DIRS})
+elseif(MSVC OR LLVM_MINGW)
     set(USE_CRYPTO_OPENSSL ON)
     target_link_libraries(supertuxkart ${PROJECT_SOURCE_DIR}/${DEPENDENCIES}/lib/libcurl.lib)
     target_link_libraries(supertuxkart ${PROJECT_SOURCE_DIR}/${DEPENDENCIES}/lib/libeay32.lib)
@@ -615,11 +660,16 @@ target_link_libraries(supertuxkart
     ${Angelscript_LIBRARIES}
     ${CURL_LIBRARIES}
     ${LIBRESOLV_LIBRARY}
-    mcpp
+    ${MCPP_LIBRARY}
     )
 
 if (USE_SQLITE3)
     target_link_libraries(supertuxkart ${SQLITE3_LIBRARY})
+endif()
+
+# Order is important when statically linking
+if (STATIC_DEPS)
+    target_link_libraries(supertuxkart ${MBEDTLS_LIBRARY} ${MBEDX509_LIBRARY})
 endif()
 
 if (USE_CRYPTO_OPENSSL)
@@ -632,6 +682,8 @@ if(NOT SERVER_ONLY)
     if(NOT USE_GLES2)
         target_link_libraries(supertuxkart ${OPENGL_gl_LIBRARY} ${GLEW_LIBRARIES})
     elseif (IOS)
+        find_library(ICONV_LIBRARY NAMES iconv libiconv)
+        target_link_libraries(supertuxkart ${ICONV_LIBRARY})
         target_link_libraries(supertuxkart "-framework QuartzCore -framework CoreGraphics -framework AVFoundation -framework AudioToolbox -framework Metal -framework GameController -framework OpenGLES -framework UIKit -framework CoreAudio -framework CoreMotion -framework Foundation -framework GLKit")
     else()
         target_link_libraries(supertuxkart GLESv2)
@@ -693,12 +745,27 @@ if(USE_WIIUSE)
 
 endif()
 
+if (STATIC_DEPS)
+    # Add missing deps because of statically link
+    if (UNIX)
+        target_link_libraries(supertuxkart dl)
+    elseif(WIN32)
+        if(NOT SERVER_ONLY)
+            target_link_libraries(supertuxkart imm32 version setupapi
+            # because of circular reference
+            freetype_library vorbis_library ogg_library)
+        endif()
+    endif()
+endif()
+
 if(MSVC OR MINGW)
   target_link_libraries(supertuxkart iphlpapi.lib)
-  add_custom_command(TARGET supertuxkart POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${PROJECT_SOURCE_DIR}/${DEPENDENCIES}/dll"
-        $<TARGET_FILE_DIR:supertuxkart>)
+  if (NOT STATIC_DEPS)
+    add_custom_command(TARGET supertuxkart POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${PROJECT_SOURCE_DIR}/${DEPENDENCIES}/dll"
+          $<TARGET_FILE_DIR:supertuxkart>)
+  endif()
   add_custom_target(stkshaders SOURCES ${STK_SHADERS})
 endif()
 

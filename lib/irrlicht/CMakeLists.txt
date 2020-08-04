@@ -532,12 +532,11 @@ endif()
 
 add_library(stkirrlicht STATIC ${IRRLICHT_SOURCES})
 
-target_link_libraries(stkirrlicht ${ZLIB_LIBRARY})
-
 if(NOT SERVER_ONLY)
     target_link_libraries(stkirrlicht ${PNG_LIBRARY} ${JPEG_LIBRARY})
+    if (STATIC_DEPS)
+        add_dependencies(stkirrlicht sdl2)
+    endif()
 endif()
-
-if(WIN32)
-    target_link_libraries(stkirrlicht)
-endif()
+# zlib in the last because png library uses it
+target_link_libraries(stkirrlicht ${ZLIB_LIBRARY})

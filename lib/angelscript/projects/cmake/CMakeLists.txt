@@ -134,7 +134,7 @@ endif()
 add_definitions(-DANGELSCRIPT_EXPORT -D_LIB)
 
 # Fix x64 issues on Linux
-if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64" AND NOT APPLE)
+if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64" AND NOT APPLE AND NOT MINGW)
     add_definitions(-fPIC)
 endif()
 
