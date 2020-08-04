@@ -3,6 +3,8 @@
 
 # the name of the target operating system
 SET(CMAKE_SYSTEM_NAME Windows)
+# for cross compling libjpeg
+SET(CMAKE_SYSTEM_PROCESSOR i386)
 
 # which compilers to use for C and C++
 SET(CMAKE_C_COMPILER i686-w64-mingw32-gcc-posix)

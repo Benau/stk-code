@@ -3,25 +3,20 @@
 
 # the name of the target operating system
 SET(CMAKE_SYSTEM_NAME Darwin)
+SET(CMAKE_SYSTEM_PROCESSOR arm64)
 
 # which compilers to use for C and C++
 SET(CMAKE_C_COMPILER ${CCTOOLS_PREFIX}/bin/arm-apple-darwin11-clang)
 SET(CMAKE_CXX_COMPILER ${CCTOOLS_PREFIX}/bin/arm-apple-darwin11-clang++)
 
 set(IOS_CPP_FLAGS "-I${CCTOOLS_PREFIX}/SDK/iPhoneOS13.5.sdk/usr/include/c++")
-SET(CMAKE_C_FLAGS "-mios-version-min=9.0.0 ${IOS_CPP_FLAGS}")
-SET(CMAKE_CXX_FLAGS "-mios-version-min=9.0.0 ${IOS_CPP_FLAGS}")
-SET(CMAKE_EXE_LINKER_FLAGS "-mios-version-min=9.0.0 ${RT}")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mios-version-min=9.0.0 ${IOS_CPP_FLAGS}")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mios-version-min=9.0.0 ${IOS_CPP_FLAGS}")
+SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mios-version-min=9.0.0 ${RT}")
 SET(CMAKE_OSX_SYSROOT ${CCTOOLS_PREFIX}/SDK/iPhoneOS13.5.sdk)
 
 # here is the target environment located
-SET(CMAKE_FIND_ROOT_PATH ${PROJECT_SOURCE_DIR}/dependencies-ios ${CCTOOLS_PREFIX}/SDK/iPhoneOS13.5.sdk)
-
-# manaully set the values which failed to auto detect
-set(FREETYPE_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/dependencies-ios/include/freetype2)
-set(CURL_LIBRARY "${PROJECT_SOURCE_DIR}/dependencies-ios/lib/libcurl.a;${PROJECT_SOURCE_DIR}/dependencies-ios/lib/libssl.a")
-set(PNG_LIBRARY ${PROJECT_SOURCE_DIR}/dependencies-ios/lib/libpng16.a)
-set(SDL2_LIBRARY ${PROJECT_SOURCE_DIR}/dependencies-ios/lib/libSDL2.a)
+SET(CMAKE_FIND_ROOT_PATH ${CCTOOLS_PREFIX}/SDK/iPhoneOS13.5.sdk)
 
 # adjust the default behaviour of the FIND_XXX() commands:
 # search headers and libraries in the target environment, search
@@ -33,5 +28,3 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(USE_WIIUSE FALSE CACHE BOOL "")
 set(USE_SQLITE3 FALSE CACHE BOOL "")
 set(IOS TRUE CACHE BOOL "")
-# comment it out to disable logging to debug console
-add_definitions(-DENABLE_IOS_DEBUG_PRINT)
