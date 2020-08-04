@@ -211,6 +211,12 @@ list(APPEND HARFBHZZ_ARGS -DHB_BUILD_SUBSET=OFF)
 list(APPEND HARFBHZZ_ARGS -DHB_HAVE_FREETYPE=ON)
 list(APPEND HARFBHZZ_ARGS -DFREETYPE_LIBRARY=${FREETYPE_LIBRARY_PATH})
 
+# Find linking warning
+if(IOS)
+    list(APPEND HARFBHZZ_ARGS -DCMAKE_C_FLAGS=-fvisibility=hidden\ -fvisibility-inlines-hidden)
+    list(APPEND HARFBHZZ_ARGS -DCMAKE_CXX_FLAGS=-fvisibility=hidden\ -fvisibility-inlines-hidden)
+endif()
+
 # From FindFreetype cmake module: it looks for FREETYPE_INCLUDE_DIR_ft2build
 # and FREETYPE_INCLUDE_DIR_freetype2 to set FREETYPE_INCLUDE_DIRS
 list(APPEND HARFBHZZ_ARGS -DFREETYPE_INCLUDE_DIR_ft2build=${FREETYPE_INCLUDE_DIRS})
