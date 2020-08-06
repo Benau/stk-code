@@ -5,12 +5,14 @@ list(APPEND ZLIB_ARGS ${CROSS_ARGS})
 list(APPEND ZLIB_ARGS -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>)
 list(APPEND ZLIB_ARGS -DBUILD_TESTING=OFF)
 
+# For most library we can just ${CMAKE_STATIC_LIBRARY_PREFIX} and ${CMAKE_STATIC_LIBRARY_SUFFIX}
+# Unless the project overrides it for msvc
 # From cmake file in zlib:
 # "On unix-like platforms the library is almost always called libz"
 if (UNIX)
-    set(ZLIB_LIBRARY_NAME "/lib/libz.a")
+    set(ZLIB_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}z${CMAKE_STATIC_LIBRARY_SUFFIX}")
 else()
-    set(ZLIB_LIBRARY_NAME "/lib/libzlibstatic.a")
+    set(ZLIB_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}zlibstatic${CMAKE_STATIC_LIBRARY_SUFFIX}")
 endif()
 ExternalProject_Add(zlib
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/zlib"
@@ -44,9 +46,9 @@ if(WIN32)
     list(APPEND MBEDTLS_ARGS -DMBEDTLS_FATAL_WARNINGS=OFF)
 endif()
 
-set(MBEDTLS_LIBRARY_NAME "/lib/libmbedtls.a")
-set(MBEDX509_LIBRARY_NAME "/lib/libmbedx509.a")
-set(MBEDCRYPTO_LIBRARY_NAME "/lib/libmbedcrypto.a")
+set(MBEDTLS_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}mbedtls${CMAKE_STATIC_LIBRARY_SUFFIX}")
+set(MBEDX509_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}mbedx509${CMAKE_STATIC_LIBRARY_SUFFIX}")
+set(MBEDCRYPTO_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}mbedcrypto${CMAKE_STATIC_LIBRARY_SUFFIX}")
 ExternalProject_Add(mbedtls
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/mbedtls"
     INSTALL_DIR "${PROJECT_BINARY_DIR}/deps"
@@ -108,7 +110,11 @@ list(APPEND CURL_ARGS -DHTTP_ONLY=ON)
 list(APPEND CURL_ARGS -DCURL_CA_BUNDLE=none)
 list(APPEND CURL_ARGS -DCURL_CA_PATH=none)
 
-set(CURL_LIBRARY_NAME "/lib/libcurl.a")
+if(MSVC)
+    set(CURL_LIBRARY_NAME "/lib/libcurl.lib")
+else()
+    set(CURL_LIBRARY_NAME "/lib/libcurl.a")
+endif()
 ExternalProject_Add(curl
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/curl"
     INSTALL_DIR "${PROJECT_BINARY_DIR}/deps"
@@ -126,7 +132,7 @@ add_dependencies(curl_library curl)
 
 if(NOT IOS)
     # SQlite
-    set(SQLITE_LIBRARY_NAME "/lib/libsqlite3.a")
+    set(SQLITE_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}sqlite3${CMAKE_STATIC_LIBRARY_SUFFIX}")
     ExternalProject_Add(sqlite
         SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/sqlite"
         INSTALL_DIR "${PROJECT_BINARY_DIR}/deps"
@@ -159,7 +165,11 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^arm" OR
     list(APPEND PNG_ARGS -DPNG_ARM_NEON=off)
 endif()
 
-set(PNG_LIBRARY_NAME "/lib/libpng16.a")
+if (MSVC)
+    set(PNG_LIBRARY_NAME "/lib/libpng16_static.lib")
+else()
+    set(PNG_LIBRARY_NAME "/lib/libpng16.a")
+endif()
 ExternalProject_Add(libpng
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/libpng"
     INSTALL_DIR "${PROJECT_BINARY_DIR}/deps"
@@ -190,7 +200,7 @@ list(APPEND FREETYPE_ARGS -DCMAKE_DISABLE_FIND_PACKAGE_BZip2=TRUE)
 list(APPEND FREETYPE_ARGS -DCMAKE_DISABLE_FIND_PACKAGE_BrotliDec=TRUE)
 list(APPEND FREETYPE_ARGS -DFT_WITH_PNG=ON)
 
-set(FREETYPE_LIBRARY_NAME "/lib/libfreetype.a")
+set(FREETYPE_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}freetype${CMAKE_STATIC_LIBRARY_SUFFIX}")
 ExternalProject_Add(freetype-bootstrap
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/freetype"
     INSTALL_DIR "${PROJECT_BINARY_DIR}/deps"
@@ -222,7 +232,7 @@ endif()
 list(APPEND HARFBHZZ_ARGS -DFREETYPE_INCLUDE_DIR_ft2build=${FREETYPE_INCLUDE_DIRS})
 list(APPEND HARFBHZZ_ARGS -DFREETYPE_INCLUDE_DIR_freetype2=${FREETYPE_INCLUDE_DIRS})
 
-set(HARFBUZZ_LIBRARY_NAME "/lib/libharfbuzz.a")
+set(HARFBUZZ_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}harfbuzz${CMAKE_STATIC_LIBRARY_SUFFIX}")
 ExternalProject_Add(harfbuzz
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/harfbuzz"
     INSTALL_DIR "${PROJECT_BINARY_DIR}/deps"
@@ -270,7 +280,7 @@ list(APPEND OGG_ARGS -DINSTALL_DOCS=OFF)
 list(APPEND OGG_ARGS -DINSTALL_PKG_CONFIG_MODULE=OFF)
 list(APPEND OGG_ARGS -DINSTALL_CMAKE_PACKAGE_MODULE=OFF)
 
-set(OGG_LIBRARY_NAME "/lib/libogg.a")
+set(OGG_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}ogg${CMAKE_STATIC_LIBRARY_SUFFIX}")
 ExternalProject_Add(ogg
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/libogg"
     INSTALL_DIR "${PROJECT_BINARY_DIR}/deps"
@@ -293,9 +303,9 @@ list(APPEND VORBIS_ARGS -DOGG_LIBRARY=${OGG_LIBRARY_PATH})
 list(APPEND VORBIS_ARGS -DOGG_INCLUDE_DIR=${UNIVERSAL_HEADER_DIR})
 list(APPEND VORBIS_ARGS -DINSTALL_CMAKE_PACKAGE_MODULE=OFF)
 
-set(VORBIS_LIBRARY_NAME "/lib/libvorbis.a")
-set(VORBISFILE_LIBRARY_NAME "/lib/libvorbisfile.a")
-set(VORBISENC_LIBRARY_NAME "/lib/libvorbisenc.a")
+set(VORBIS_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}vorbis${CMAKE_STATIC_LIBRARY_SUFFIX}")
+set(VORBISFILE_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}vorbisfile${CMAKE_STATIC_LIBRARY_SUFFIX}")
+set(VORBISENC_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}vorbisenc${CMAKE_STATIC_LIBRARY_SUFFIX}")
 ExternalProject_Add(vorbis
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/libvorbis"
     INSTALL_DIR "${PROJECT_BINARY_DIR}/deps"
@@ -340,7 +350,7 @@ if(IOS)
     list(APPEND SDL2_ARGS -DHIDAPI=OFF)
 endif()
 
-set(SDL2_LIBRARY_NAME "/lib/libSDL2.a")
+set(SDL2_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}SDL2${CMAKE_STATIC_LIBRARY_SUFFIX}")
 ExternalProject_Add(sdl2
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/sdl2"
     INSTALL_DIR "${PROJECT_BINARY_DIR}/deps"
@@ -363,7 +373,11 @@ list(APPEND JPEG_ARGS -DBUILD_TESTING=OFF)
 # libjpeg install library to lib64 folder, override it
 list(APPEND JPEG_ARGS -DCMAKE_INSTALL_DEFAULT_LIBDIR=lib)
 
-set(JPEG_LIBRARY_NAME "/lib/libjpeg.a")
+if (MSVC)
+    set(JPEG_LIBRARY_NAME "/lib/jpeg-static.lib")
+else()
+    set(JPEG_LIBRARY_NAME "/lib/libjpeg.a")
+endif()
 ExternalProject_Add(libjpeg
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/libjpeg"
     INSTALL_DIR "${PROJECT_BINARY_DIR}/deps"
@@ -392,10 +406,10 @@ list(APPEND OPENAL_ARGS -DALSOFT_NO_CONFIG_UTIL=ON)
 list(APPEND OPENAL_ARGS -DALSOFT_EXAMPLES=OFF)
 list(APPEND OPENAL_ARGS -DALSOFT_TESTS=OFF)
 
-if(MINGW)
-    set(OPENAL_LIBRARY_NAME "/lib/libOpenAL32.a")
+if(WIN32)
+    set(OPENAL_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}OpenAL32${CMAKE_STATIC_LIBRARY_SUFFIX}")
 else()
-    set(OPENAL_LIBRARY_NAME "/lib/libopenal.a")
+    set(OPENAL_LIBRARY_NAME "/lib/${CMAKE_STATIC_LIBRARY_PREFIX}openal${CMAKE_STATIC_LIBRARY_SUFFIX}")
 endif()
 ExternalProject_Add(openal
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/dependencies-universal/openal"
