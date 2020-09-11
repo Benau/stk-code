@@ -263,7 +263,8 @@ namespace LineBreakingRules
 // ----------------------------------------------------------------------------
 /* Turn text into glyph layout for rendering by libraqm. */
 void FontManager::shape(const std::u32string& text,
-                        std::vector<irr::gui::GlyphLayout>& gls)
+                        std::vector<irr::gui::GlyphLayout>& gls,
+                        u32 shape_flag)
 {
     // Helper struct
     struct ShapeGlyph
@@ -299,6 +300,51 @@ void FontManager::shape(const std::u32string& text,
     // it back here
     if (text.back() == U'\n')
         lines.push_back(U"");
+
+    // URL marker
+    std::vector<std::pair<int, int> > http_pos;
+    if ((shape_flag & gui::SF_DISABLE_URL_HIGHLIGHT) == 0)
+    {
+        size_t pos = text.find(U"http://", 0);
+        while (pos != std::u32string::npos)
+        {
+            // Find nearest newline or whitespace
+            size_t newline_pos = text.find(U'\n', pos + 1);
+            size_t space_pos = text.find(U' ', pos + 1);
+            size_t end_pos = std::u32string::npos;
+            if (newline_pos != std::u32string::npos ||
+                space_pos != std::u32string::npos)
+            {
+                if (space_pos > newline_pos)
+                    end_pos = newline_pos;
+                else
+                    end_pos = space_pos;
+            }
+            else
+                end_pos = text.size();
+            http_pos.emplace_back((int)pos, (int)end_pos);
+            pos = text.find(U"http://", pos + 1);
+        }
+        pos = text.find(U"https://", 0);
+        while (pos != std::u32string::npos)
+        {
+            size_t newline_pos = text.find(U'\n', pos + 1);
+            size_t space_pos = text.find(U' ', pos + 1);
+            size_t end_pos = std::u32string::npos;
+            if (newline_pos != std::u32string::npos ||
+                space_pos != std::u32string::npos)
+            {
+                if (space_pos > newline_pos)
+                    end_pos = newline_pos;
+                else
+                    end_pos = space_pos;
+            }
+            else
+                end_pos = text.size();
+            http_pos.emplace_back((int)pos, (int)end_pos);
+            pos = text.find(U"https://", pos + 1);
+        }
+    }
 
     int start = 0;
     std::shared_ptr<std::u32string> orig_string =
@@ -565,7 +611,15 @@ void FontManager::shape(const std::u32string& text,
                     gl.flags |= gui::GLF_BREAKABLE;
                 // Add start offset to clusters
                 for (int& each_cluster : gl.cluster)
+                {
                     each_cluster += start;
+                    for (auto& p : http_pos)
+                    {
+                        if (each_cluster >= p.first &&
+                            each_cluster < p.second)
+                            gl.flags |= gui::GLF_URL;
+                    }
+                }
             }
             gls.insert(gls.end(), cur_line.begin(), cur_line.end());
         }
@@ -610,7 +664,7 @@ void FontManager::initGlyphLayouts(const core::stringw& text,
 
     auto& cached_gls = getCachedLayouts(text);
     if (cached_gls.empty())
-        shape(StringUtils::wideToUtf32(text), cached_gls);
+        shape(StringUtils::wideToUtf32(text), cached_gls, shape_flag);
     gls = cached_gls;
 }   // initGlyphLayouts
 
