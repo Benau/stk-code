@@ -35,7 +35,7 @@
 #include "input/input_manager.hpp"
 #include "modes/demo_world.hpp"
 #include "modes/world.hpp"
-#include "network/rewind_manager.hpp"
+#include "online/link_helper.hpp"
 #include "states_screens/state_manager.hpp"
 #include "utils/debug.hpp"
 #include "utils/profiler.hpp"
@@ -79,7 +79,14 @@ bool EventHandler::OnEvent (const SEvent &event)
         if (ScreenKeyboard::getCurrent()->onEvent(event))
             return true; // EVENT_BLOCK
     }
-    
+    if (event.EventType == EET_MOUSE_INPUT_EVENT &&
+        event.MouseInput.Event == EMIE_LMOUSE_PRESSED_DOWN)
+    {
+        bool found = Online::LinkHelper::triggerOpenURL(
+            event.MouseInput.X, event.MouseInput.Y);
+        if (found)
+            return true;
+    }
     // TO DEBUG HATS (when you don't actually have a hat)
     /*
     if (event.EventType == EET_KEY_INPUT_EVENT)

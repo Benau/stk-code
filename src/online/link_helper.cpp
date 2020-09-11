@@ -16,6 +16,7 @@
 
 #include "online/link_helper.hpp"
 #include "graphics/irr_driver.hpp"
+#include "graphics/2dutils.hpp"
 #include "utils/log.hpp"
 #include <string>
 #ifdef _WIN32
@@ -36,6 +37,50 @@ using namespace Online;
 
 namespace Online
 {
+    std::vector<std::pair<core::rect<s32>, std::string> > g_clickable_urls;
+    void LinkHelper::reset()
+    {
+        g_clickable_urls.clear();
+    }
+
+    int LinkHelper::addClickableURLRect(const core::rect<s32>& rect,
+                                        const std::string& url)
+    {
+        g_clickable_urls.emplace_back(rect, url);
+        return (int)(g_clickable_urls.size() - 1);
+    }
+
+    void LinkHelper::updateClickableURLRect(int id,
+                                            const core::position2d<s32>& pos)
+    {
+        if (id < 0 || id >= (int)g_clickable_urls.size())
+            return;
+        g_clickable_urls[id].first.addInternalPoint(pos);
+    }
+
+    bool LinkHelper::triggerOpenURL(s32 x, s32 y)
+    {
+        for (auto& p : g_clickable_urls)
+        {
+            if (p.first.isPointInside({x, y}))
+            {
+                    Log::info("","%s",p.second.c_str());
+
+                openURL(p.second);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void LinkHelper::debugDraw()
+    {
+#if 1
+        for (auto& p : g_clickable_urls)
+            GL32_draw2DRectangle(video::SColor(128, 255, 0, 0), p.first);
+#endif
+    }
+
     bool LinkHelper::isSupported()
     {
 #if defined(_WIN32) || defined(__APPLE__) || (defined(__linux__))
@@ -45,7 +90,7 @@ namespace Online
 #endif
     }
 
-    void LinkHelper::openURL (std::string url)
+    void LinkHelper::openURL (const std::string& url)
     {
 #if defined(ANDROID)
         JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();

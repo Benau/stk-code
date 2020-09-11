@@ -30,6 +30,7 @@
 #include "graphics/stk_tex_manager.hpp"
 #include "guiengine/engine.hpp"
 #include "guiengine/skin.hpp"
+#include "online/link_helper.hpp"
 #include "utils/string_utils.hpp"
 #include "utils/utf8.h"
 
@@ -689,6 +690,35 @@ void FontWithFace::render(const std::vector<gui::GlyphLayout>& gl,
 
     unsigned cur_line = 0;
     bool line_changed = false;
+    int cur_url_rect = -1;
+    // Check for link first, have to split it up to take care for newline
+    std::vector<std::pair<std::string, unsigned> > all_urls;
+    for (unsigned i = 0; i < gl.size(); i++)
+    {
+        const gui::GlyphLayout& glyph_layout = gl[i];
+        if ((glyph_layout.flags & gui::GLF_URL) != 0)
+        {
+            for (unsigned j = i; j < gl.size(); j++)
+            {
+                if ((gl[j].flags & gui::GLF_NEWLINE) != 0
+                     && j + 1 != gl.size())
+                    continue;
+                if (j + 1 == gl.size() || (gl[j].flags & gui::GLF_URL) == 0)
+                {
+                    int first_pos = glyph_layout.cluster.front();
+                    int end_pos = 0;
+                    if (gl[j].cluster.empty())
+                        end_pos = gl[j - 1].cluster.back();
+                    else
+                        end_pos = gl[j].cluster.back();
+                    all_urls.emplace_back(StringUtils::utf32ToUtf8(glyph_layout
+                        .orig_string->substr(first_pos, end_pos + 1)), j);
+                    i = j;
+                    break;
+                }
+            }
+        }
+    }
     for (unsigned i = 0; i < gl.size(); i++)
     {
         const gui::GlyphLayout& glyph_layout = gl[i];
@@ -697,6 +727,7 @@ void FontWithFace::render(const std::vector<gui::GlyphLayout>& gl,
             offset.Y += (s32)next_line_height;
             cur_line++;
             line_changed = true;
+            cur_url_rect = -1;
             continue;
         }
         if (line_changed)
@@ -809,6 +840,28 @@ void FontWithFace::render(const std::vector<gui::GlyphLayout>& gl,
                         gld_offsets.push_back({start + each_size, offset.Y});
                     }
                     start += each_size;
+                }
+                if ((glyph_layout.flags & gui::GLF_URL) != 0)
+                {
+                    core::rect<s32> r(offset.X, offset.Y,
+                        offset.X + width, offset.Y + m_font_max_height * scale);
+                    if (cur_url_rect == -1)
+                    {
+                        int idx = 0;
+                        for (auto& p : all_urls)
+                        {
+                            if (i > p.second)
+                                break;
+                            idx++;
+                        }
+                        cur_url_rect = Online::LinkHelper::
+                            addClickableURLRect(r, all_urls[idx].first);
+                    }
+                    else
+                    {
+                        Online::LinkHelper::updateClickableURLRect(cur_url_rect,
+                            r.LowerRightCorner);
+                    }
                 }
             }
             offset.X += width * scale;

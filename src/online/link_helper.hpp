@@ -18,14 +18,22 @@
 #define HEADER_LINK_HELPER_HPP
 
 #include <string>
+#include "rect.h"
+
+using namespace irr;
 
 namespace Online
 {
-    class LinkHelper
-    {
-    public:
-        static bool isSupported();
-        static void openURL (std::string url);
-    }; //class LinkHelper
+namespace LinkHelper
+{
+    bool isSupported();
+    void openURL(const std::string& url);
+    void reset();
+    int addClickableURLRect(const core::rect<s32>& rect,
+                            const std::string& url);
+    void updateClickableURLRect(int id, const core::position2d<s32>& pos);
+    bool triggerOpenURL(s32 x, s32 y);
+    void debugDraw();
+}; //namespace LinkHelper
 } // namespace Online
 #endif // link_helper_HPP

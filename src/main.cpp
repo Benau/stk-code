@@ -240,6 +240,7 @@
 #include "network/socket_address.hpp"
 #include "network/stk_host.hpp"
 #include "network/stk_peer.hpp"
+#include "online/link_helper.hpp"
 #include "online/profile_manager.hpp"
 #include "online/request_manager.hpp"
 #include "race/grand_prix_manager.hpp"
@@ -1723,6 +1724,7 @@ void clearGlobalVariables()
 #endif
     World::clear();
     GUIEngine::resetGlobalVariables();
+    Online::LinkHelper::reset();
 }   // clearGlobalVariables
 
 //=============================================================================

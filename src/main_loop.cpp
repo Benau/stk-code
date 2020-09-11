@@ -46,6 +46,7 @@
 #include "network/rewind_manager.hpp"
 #include "network/server.hpp"
 #include "network/stk_host.hpp"
+#include "online/link_helper.hpp"
 #include "online/request_manager.hpp"
 #include "race/history.hpp"
 #include "race/race_manager.hpp"
@@ -682,6 +683,8 @@ void MainLoop::run()
                     left_over_time = 0.0f;
                 }
 
+                // Clear clickable url after polling for events
+                Online::LinkHelper::reset();
                 if (abort)
                 {
                     m_request_abort = true;

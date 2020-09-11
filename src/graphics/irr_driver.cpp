@@ -73,6 +73,7 @@
 #include "network/network_config.hpp"
 #include "network/stk_host.hpp"
 #include "network/stk_peer.hpp"
+#include "online/link_helper.hpp"
 #include "physics/physics.hpp"
 #include "scriptengine/property_animator.hpp"
 #include "states_screens/dialogs/confirm_resolution_dialog.hpp"
@@ -2057,6 +2058,7 @@ void IrrDriver::update(float dt, bool is_loading)
                                    video::SColor(255,100,101,140));
 
         GUIEngine::render(dt, is_loading);
+        Online::LinkHelper::debugDraw();
         if (m_render_nw_debug && !is_loading)
         {
             renderNetworkDebug();
