@@ -28,7 +28,7 @@ jobs:
       matrix:
         # TODO: re-add 'macos-latest' as an option here. MacOS has been
         #  temporarily disabled because the CI can't install harfbuzz correctly.
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest]
         compiler: [gcc, clang]
         build_type: [Debug, Release]
         server_only: [ON, OFF]
@@ -53,12 +53,9 @@ jobs:
       - name: Install macos dependencies
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          brew update && brew bundle
-          # Something funky happens with freetype if mono is left
-          sudo mv /Library/Frameworks/Mono.framework /Library/Frameworks/Mono.framework-disabled
-          sudo mkdir -p /usr/local/include/
-          sudo ln -s /System/Library/Frameworks/OpenGL.framework/Versions/A/Headers/ /usr/local/include/GL;
-          export CMAKE_PREFIX_PATH=/usr/local/opt/freetype/:/usr/local/opt/curl/:/usr/local/opt/libogg/:/usr/local/opt/libogg/:/usr/local/opt/libvorbis/:/usr/local/opt/openssl\@1.1/:/usr/local/opt/harfbuzz/
+          cd /usr/local && wget https://github.com/supertuxkart/dependencies/releases/download/latest/dependencies-mac.tar.xz && \
+          tar xf dependencies-mac.tar.xz
+          brew update && brew install cmake macdylibbundler
       - name: Set compiler (gcc)
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc' }}
         run: |
@@ -98,9 +95,17 @@ jobs:
           $CXX --version
           mkdir "build"
           cd "build"
-          /usr/local/opt/cmake/bin/cmake .. -DFREETYPE_INCLUDE_DIRS=/usr/local/opt/freetype/include/freetype2/ -DOPENAL_INCLUDE_DIR=/usr/local/opt/openal-soft/include/ -DOPENAL_LIBRARY=/usr/local/opt/openal-soft/lib/libopenal.dylib -DFREETYPE_LIBRARY=/usr/local/opt/freetype/lib/libfreetype.dylib -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DSERVER_ONLY=$SERVER_ONLY -DCHECK_ASSETS=off -DBUILD_RECORDER=off;
+          CFLAGS="-mmacosx-version-min=10.9" CXXFLAGS="-mmacosx-version-min=10.9" LINKFLAGS="-mmacosx-version-min=10.9" LDFLAGS="-mmacosx-version-min=10.9" /usr/local/opt/cmake/bin/cmake .. -DCMAKE_OSX_DEPLOYMENT_TARGET=10.9 -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DSERVER_ONLY=$SERVER_ONLY -DCHECK_ASSETS=off -DBUILD_RECORDER=off;
       - name: Build and install
         working-directory: build
         run: |
           make -j3 VERBOSE=1
           make install DESTDIR="/tmp/stk" VERBOSE=1
+      - name: Packaging (macos)
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: |
+          /usr/local/opt/dylibbundler/bin/dylibbundler -od -b -x ./bin/SuperTuxKart.app/Contents/MacOS/supertuxkart -d ./bin/SuperTuxKart.app/Contents/libs/ -p @executable_path/../libs/
+          otool -L ./bin/SuperTuxKart.app/Contents/MacOS/supertuxkart
+          otool -l ./bin/SuperTuxKart.app/Contents/MacOS/supertuxkart
+
+
