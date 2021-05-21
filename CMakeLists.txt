@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.4)
 
 # root CMakeLists for the SuperTuxKart project
 project(SuperTuxKart)
-set(PROJECT_VERSION "git")
+set(PROJECT_VERSION "1.2.1")
 
 add_definitions( -DSUPERTUXKART_VERSION="${PROJECT_VERSION}" )
 
@@ -547,7 +547,8 @@ else()
 
     # Build the final executable
     if (IOS)
-        file(GLOB IOS_ASSETS_FILES ${IOS_ASSETS} ${IOS_LAUNCHSCREEN} ${IOS_IMAGES_XCASSETS})
+        #file(GLOB IOS_ASSETS_FILES ${IOS_ASSETS} ${IOS_LAUNCHSCREEN} ${IOS_IMAGES_XCASSETS})
+        file(GLOB IOS_ASSETS_FILES ${IOS_ASSETS})
         set_source_files_properties(${IOS_ASSETS_FILES} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
         add_executable(supertuxkart ${STK_SOURCES} ${STK_RESOURCES} ${STK_HEADERS} ${IOS_ASSETS_FILES})
         set_target_properties(supertuxkart PROPERTIES
@@ -683,7 +684,7 @@ if(NOT SERVER_ONLY)
         check_c_source_compiles("int main() { return 0; }" COREMOTION_EXISTS)
         set(CMAKE_REQUIRED_LIBRARIES ${prev_req_lib})
         if (COREMOTION_EXISTS)
-            target_link_libraries(supertuxkart "-framework CoreMotion")
+            #target_link_libraries(supertuxkart "-framework CoreMotion")
         endif()
     endif()
 
