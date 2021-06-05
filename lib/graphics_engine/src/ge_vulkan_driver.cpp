@@ -52,8 +52,7 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
     createInstance(window);
 
 #ifndef __APPLE__
-    if (gladLoadVulkanUserPtr(NULL,
-        (GLADuserptrloadfunc)_vk_getInstanceProcAddr, m_vk.instance) == 0)
+    if (gladLoaderLoadVulkan(m_vk.instance, NULL, NULL) == 0)
     {
         throw std::runtime_error("gladLoadVulkanUserPtr failed "
             "with non-NULL instance");
@@ -67,8 +66,7 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
     createDevice();
 
 #ifndef __APPLE__
-    if (gladLoadVulkanUserPtr(m_physical_device,
-        (GLADuserptrloadfunc)_vk_getInstanceProcAddr, m_vk.instance) == 0)
+    if (gladLoaderLoadVulkan(m_vk.instance, m_physical_device, m_vk.device) == 0)
     {
         throw std::runtime_error("gladLoadVulkanUserPtr failed with "
             "non-NULL instance and non-NULL m_physical_device");
@@ -93,8 +91,7 @@ GEVulkanDriver::~GEVulkanDriver()
 void GEVulkanDriver::createInstance(SDL_Window* window)
 {
 #ifndef __APPLE__
-    if (gladLoadVulkanUserPtr(NULL,
-        (GLADuserptrloadfunc)_vk_getInstanceProcAddr, NULL) == 0)
+    if (gladLoaderLoadVulkan(NULL, NULL, NULL) == 0)
     {
         throw std::runtime_error("gladLoadVulkanUserPtr failed 1st time");
     }
