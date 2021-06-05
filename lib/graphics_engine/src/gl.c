@@ -386,6 +386,7 @@ int GLAD_GL_EXT_texture_object = 0;
 int GLAD_GL_EXT_texture_perturb_normal = 0;
 int GLAD_GL_EXT_texture_sRGB = 0;
 int GLAD_GL_EXT_texture_sRGB_R8 = 0;
+int GLAD_GL_EXT_texture_sRGB_RG8 = 0;
 int GLAD_GL_EXT_texture_sRGB_decode = 0;
 int GLAD_GL_EXT_texture_shadow_lod = 0;
 int GLAD_GL_EXT_texture_shared_exponent = 0;
@@ -747,7 +748,6 @@ int GLAD_GL_EXT_texture_mirror_clamp_to_edge = 0;
 int GLAD_GL_EXT_texture_norm16 = 0;
 int GLAD_GL_EXT_texture_query_lod = 0;
 int GLAD_GL_EXT_texture_rg = 0;
-int GLAD_GL_EXT_texture_sRGB_RG8 = 0;
 int GLAD_GL_EXT_texture_storage = 0;
 int GLAD_GL_EXT_texture_type_2_10_10_10_REV = 0;
 int GLAD_GL_EXT_texture_view = 0;
@@ -762,6 +762,7 @@ int GLAD_GL_IMG_shader_binary = 0;
 int GLAD_GL_IMG_texture_compression_pvrtc = 0;
 int GLAD_GL_IMG_texture_compression_pvrtc2 = 0;
 int GLAD_GL_IMG_texture_filter_cubic = 0;
+int GLAD_GL_MESA_bgra = 0;
 int GLAD_GL_NV_copy_buffer = 0;
 int GLAD_GL_NV_coverage_sample = 0;
 int GLAD_GL_NV_depth_nonlinear = 0;
@@ -848,9 +849,11 @@ int GLAD_GL_QCOM_binning_control = 0;
 int GLAD_GL_QCOM_driver_control = 0;
 int GLAD_GL_QCOM_extended_get = 0;
 int GLAD_GL_QCOM_extended_get2 = 0;
+int GLAD_GL_QCOM_frame_extrapolation = 0;
 int GLAD_GL_QCOM_framebuffer_foveated = 0;
 int GLAD_GL_QCOM_motion_estimation = 0;
 int GLAD_GL_QCOM_perfmon_global_mode = 0;
+int GLAD_GL_QCOM_render_shared_exponent = 0;
 int GLAD_GL_QCOM_shader_framebuffer_fetch_noncoherent = 0;
 int GLAD_GL_QCOM_shader_framebuffer_fetch_rate = 0;
 int GLAD_GL_QCOM_shading_rate = 0;
@@ -3917,6 +3920,7 @@ PFNGLEXTGETTEXSUBIMAGEQCOMPROC glad_glExtGetTexSubImageQCOM = NULL;
 PFNGLEXTGETTEXTURESQCOMPROC glad_glExtGetTexturesQCOM = NULL;
 PFNGLEXTISPROGRAMBINARYQCOMPROC glad_glExtIsProgramBinaryQCOM = NULL;
 PFNGLEXTTEXOBJECTSTATEOVERRIDEIQCOMPROC glad_glExtTexObjectStateOverrideiQCOM = NULL;
+PFNGLEXTRAPOLATETEX2DQCOMPROC glad_glExtrapolateTex2DQCOM = NULL;
 PFNGLFENCESYNCAPPLEPROC glad_glFenceSyncAPPLE = NULL;
 PFNGLFLUSHMAPPEDBUFFERRANGEEXTPROC glad_glFlushMappedBufferRangeEXT = NULL;
 PFNGLFRAMEBUFFERFETCHBARRIERQCOMPROC glad_glFramebufferFetchBarrierQCOM = NULL;
@@ -7218,6 +7222,8 @@ static void glad_gl_load_GL_EXT_gpu_shader4( GLADuserptrloadfunc load, void* use
     glad_glBindFragDataLocationEXT = (PFNGLBINDFRAGDATALOCATIONEXTPROC) load(userptr, "glBindFragDataLocationEXT");
     glad_glGetFragDataLocationEXT = (PFNGLGETFRAGDATALOCATIONEXTPROC) load(userptr, "glGetFragDataLocationEXT");
     glad_glGetUniformuivEXT = (PFNGLGETUNIFORMUIVEXTPROC) load(userptr, "glGetUniformuivEXT");
+    glad_glGetVertexAttribIivEXT = (PFNGLGETVERTEXATTRIBIIVEXTPROC) load(userptr, "glGetVertexAttribIivEXT");
+    glad_glGetVertexAttribIuivEXT = (PFNGLGETVERTEXATTRIBIUIVEXTPROC) load(userptr, "glGetVertexAttribIuivEXT");
     glad_glUniform1uiEXT = (PFNGLUNIFORM1UIEXTPROC) load(userptr, "glUniform1uiEXT");
     glad_glUniform1uivEXT = (PFNGLUNIFORM1UIVEXTPROC) load(userptr, "glUniform1uivEXT");
     glad_glUniform2uiEXT = (PFNGLUNIFORM2UIEXTPROC) load(userptr, "glUniform2uiEXT");
@@ -7226,6 +7232,27 @@ static void glad_gl_load_GL_EXT_gpu_shader4( GLADuserptrloadfunc load, void* use
     glad_glUniform3uivEXT = (PFNGLUNIFORM3UIVEXTPROC) load(userptr, "glUniform3uivEXT");
     glad_glUniform4uiEXT = (PFNGLUNIFORM4UIEXTPROC) load(userptr, "glUniform4uiEXT");
     glad_glUniform4uivEXT = (PFNGLUNIFORM4UIVEXTPROC) load(userptr, "glUniform4uivEXT");
+    glad_glVertexAttribI1iEXT = (PFNGLVERTEXATTRIBI1IEXTPROC) load(userptr, "glVertexAttribI1iEXT");
+    glad_glVertexAttribI1ivEXT = (PFNGLVERTEXATTRIBI1IVEXTPROC) load(userptr, "glVertexAttribI1ivEXT");
+    glad_glVertexAttribI1uiEXT = (PFNGLVERTEXATTRIBI1UIEXTPROC) load(userptr, "glVertexAttribI1uiEXT");
+    glad_glVertexAttribI1uivEXT = (PFNGLVERTEXATTRIBI1UIVEXTPROC) load(userptr, "glVertexAttribI1uivEXT");
+    glad_glVertexAttribI2iEXT = (PFNGLVERTEXATTRIBI2IEXTPROC) load(userptr, "glVertexAttribI2iEXT");
+    glad_glVertexAttribI2ivEXT = (PFNGLVERTEXATTRIBI2IVEXTPROC) load(userptr, "glVertexAttribI2ivEXT");
+    glad_glVertexAttribI2uiEXT = (PFNGLVERTEXATTRIBI2UIEXTPROC) load(userptr, "glVertexAttribI2uiEXT");
+    glad_glVertexAttribI2uivEXT = (PFNGLVERTEXATTRIBI2UIVEXTPROC) load(userptr, "glVertexAttribI2uivEXT");
+    glad_glVertexAttribI3iEXT = (PFNGLVERTEXATTRIBI3IEXTPROC) load(userptr, "glVertexAttribI3iEXT");
+    glad_glVertexAttribI3ivEXT = (PFNGLVERTEXATTRIBI3IVEXTPROC) load(userptr, "glVertexAttribI3ivEXT");
+    glad_glVertexAttribI3uiEXT = (PFNGLVERTEXATTRIBI3UIEXTPROC) load(userptr, "glVertexAttribI3uiEXT");
+    glad_glVertexAttribI3uivEXT = (PFNGLVERTEXATTRIBI3UIVEXTPROC) load(userptr, "glVertexAttribI3uivEXT");
+    glad_glVertexAttribI4bvEXT = (PFNGLVERTEXATTRIBI4BVEXTPROC) load(userptr, "glVertexAttribI4bvEXT");
+    glad_glVertexAttribI4iEXT = (PFNGLVERTEXATTRIBI4IEXTPROC) load(userptr, "glVertexAttribI4iEXT");
+    glad_glVertexAttribI4ivEXT = (PFNGLVERTEXATTRIBI4IVEXTPROC) load(userptr, "glVertexAttribI4ivEXT");
+    glad_glVertexAttribI4svEXT = (PFNGLVERTEXATTRIBI4SVEXTPROC) load(userptr, "glVertexAttribI4svEXT");
+    glad_glVertexAttribI4ubvEXT = (PFNGLVERTEXATTRIBI4UBVEXTPROC) load(userptr, "glVertexAttribI4ubvEXT");
+    glad_glVertexAttribI4uiEXT = (PFNGLVERTEXATTRIBI4UIEXTPROC) load(userptr, "glVertexAttribI4uiEXT");
+    glad_glVertexAttribI4uivEXT = (PFNGLVERTEXATTRIBI4UIVEXTPROC) load(userptr, "glVertexAttribI4uivEXT");
+    glad_glVertexAttribI4usvEXT = (PFNGLVERTEXATTRIBI4USVEXTPROC) load(userptr, "glVertexAttribI4usvEXT");
+    glad_glVertexAttribIPointerEXT = (PFNGLVERTEXATTRIBIPOINTEREXTPROC) load(userptr, "glVertexAttribIPointerEXT");
 }
 static void glad_gl_load_GL_EXT_histogram( GLADuserptrloadfunc load, void* userptr) {
     if(!GLAD_GL_EXT_histogram) return;
@@ -9281,6 +9308,10 @@ static void glad_gl_load_GL_QCOM_extended_get2( GLADuserptrloadfunc load, void* 
     glad_glExtGetShadersQCOM = (PFNGLEXTGETSHADERSQCOMPROC) load(userptr, "glExtGetShadersQCOM");
     glad_glExtIsProgramBinaryQCOM = (PFNGLEXTISPROGRAMBINARYQCOMPROC) load(userptr, "glExtIsProgramBinaryQCOM");
 }
+static void glad_gl_load_GL_QCOM_frame_extrapolation( GLADuserptrloadfunc load, void* userptr) {
+    if(!GLAD_GL_QCOM_frame_extrapolation) return;
+    glad_glExtrapolateTex2DQCOM = (PFNGLEXTRAPOLATETEX2DQCOMPROC) load(userptr, "glExtrapolateTex2DQCOM");
+}
 static void glad_gl_load_GL_QCOM_framebuffer_foveated( GLADuserptrloadfunc load, void* userptr) {
     if(!GLAD_GL_QCOM_framebuffer_foveated) return;
     glad_glFramebufferFoveationConfigQCOM = (PFNGLFRAMEBUFFERFOVEATIONCONFIGQCOMPROC) load(userptr, "glFramebufferFoveationConfigQCOM");
@@ -9761,6 +9792,7 @@ static int glad_gl_find_extensions_gl( int version) {
     GLAD_GL_EXT_texture_perturb_normal = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_perturb_normal");
     GLAD_GL_EXT_texture_sRGB = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_sRGB");
     GLAD_GL_EXT_texture_sRGB_R8 = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_sRGB_R8");
+    GLAD_GL_EXT_texture_sRGB_RG8 = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_sRGB_RG8");
     GLAD_GL_EXT_texture_sRGB_decode = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_sRGB_decode");
     GLAD_GL_EXT_texture_shadow_lod = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_shadow_lod");
     GLAD_GL_EXT_texture_shared_exponent = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_shared_exponent");
@@ -10461,6 +10493,7 @@ static int glad_gl_find_extensions_gles2( int version) {
     GLAD_GL_EXT_texture_filter_anisotropic = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_filter_anisotropic");
     GLAD_GL_EXT_texture_filter_minmax = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_filter_minmax");
     GLAD_GL_EXT_texture_sRGB_R8 = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_sRGB_R8");
+    GLAD_GL_EXT_texture_sRGB_RG8 = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_sRGB_RG8");
     GLAD_GL_EXT_texture_sRGB_decode = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_sRGB_decode");
     GLAD_GL_EXT_texture_shadow_lod = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_shadow_lod");
     GLAD_GL_EXT_win32_keyed_mutex = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_win32_keyed_mutex");
@@ -10621,7 +10654,6 @@ static int glad_gl_find_extensions_gles2( int version) {
     GLAD_GL_EXT_texture_norm16 = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_norm16");
     GLAD_GL_EXT_texture_query_lod = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_query_lod");
     GLAD_GL_EXT_texture_rg = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_rg");
-    GLAD_GL_EXT_texture_sRGB_RG8 = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_sRGB_RG8");
     GLAD_GL_EXT_texture_storage = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_storage");
     GLAD_GL_EXT_texture_type_2_10_10_10_REV = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_type_2_10_10_10_REV");
     GLAD_GL_EXT_texture_view = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_EXT_texture_view");
@@ -10636,6 +10668,7 @@ static int glad_gl_find_extensions_gles2( int version) {
     GLAD_GL_IMG_texture_compression_pvrtc = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_IMG_texture_compression_pvrtc");
     GLAD_GL_IMG_texture_compression_pvrtc2 = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_IMG_texture_compression_pvrtc2");
     GLAD_GL_IMG_texture_filter_cubic = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_IMG_texture_filter_cubic");
+    GLAD_GL_MESA_bgra = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_MESA_bgra");
     GLAD_GL_NV_copy_buffer = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_NV_copy_buffer");
     GLAD_GL_NV_coverage_sample = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_NV_coverage_sample");
     GLAD_GL_NV_depth_nonlinear = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_NV_depth_nonlinear");
@@ -10722,9 +10755,11 @@ static int glad_gl_find_extensions_gles2( int version) {
     GLAD_GL_QCOM_driver_control = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_QCOM_driver_control");
     GLAD_GL_QCOM_extended_get = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_QCOM_extended_get");
     GLAD_GL_QCOM_extended_get2 = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_QCOM_extended_get2");
+    GLAD_GL_QCOM_frame_extrapolation = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_QCOM_frame_extrapolation");
     GLAD_GL_QCOM_framebuffer_foveated = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_QCOM_framebuffer_foveated");
     GLAD_GL_QCOM_motion_estimation = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_QCOM_motion_estimation");
     GLAD_GL_QCOM_perfmon_global_mode = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_QCOM_perfmon_global_mode");
+    GLAD_GL_QCOM_render_shared_exponent = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_QCOM_render_shared_exponent");
     GLAD_GL_QCOM_shader_framebuffer_fetch_noncoherent = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_QCOM_shader_framebuffer_fetch_noncoherent");
     GLAD_GL_QCOM_shader_framebuffer_fetch_rate = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_QCOM_shader_framebuffer_fetch_rate");
     GLAD_GL_QCOM_shading_rate = glad_gl_has_extension(version, exts, num_exts_i, exts_i, "GL_QCOM_shading_rate");
@@ -10900,6 +10935,7 @@ int gladLoadGLES2UserPtr( GLADuserptrloadfunc load, void *userptr) {
     glad_gl_load_GL_QCOM_driver_control(load, userptr);
     glad_gl_load_GL_QCOM_extended_get(load, userptr);
     glad_gl_load_GL_QCOM_extended_get2(load, userptr);
+    glad_gl_load_GL_QCOM_frame_extrapolation(load, userptr);
     glad_gl_load_GL_QCOM_framebuffer_foveated(load, userptr);
     glad_gl_load_GL_QCOM_motion_estimation(load, userptr);
     glad_gl_load_GL_QCOM_shader_framebuffer_fetch_noncoherent(load, userptr);
@@ -10921,6 +10957,343 @@ int gladLoadGLES2( GLADloadfunc load) {
 
  
 
+#ifdef GLAD_GL
+
+#ifndef GLAD_LOADER_LIBRARY_C_
+#define GLAD_LOADER_LIBRARY_C_
+
+#include <stddef.h>
+#include <stdlib.h>
+
+#if GLAD_PLATFORM_WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
+
+
+static void* glad_get_dlopen_handle(const char *lib_names[], int length) {
+    void *handle = NULL;
+    int i;
+
+    for (i = 0; i < length; ++i) {
+#if GLAD_PLATFORM_WIN32
+  #if GLAD_PLATFORM_UWP
+        size_t buffer_size = (strlen(lib_names[i]) + 1) * sizeof(WCHAR);
+        LPWSTR buffer = (LPWSTR) malloc(buffer_size);
+        if (buffer != NULL) {
+            int ret = MultiByteToWideChar(CP_ACP, 0, lib_names[i], -1, buffer, buffer_size);
+            if (ret != 0) {
+                handle = (void*) LoadPackagedLibrary(buffer, 0);
+            }
+            free((void*) buffer);
+        }
+  #else
+        handle = (void*) LoadLibraryA(lib_names[i]);
+  #endif
+#else
+        handle = dlopen(lib_names[i], RTLD_LAZY | RTLD_LOCAL);
+#endif
+        if (handle != NULL) {
+            return handle;
+        }
+    }
+
+    return NULL;
+}
+
+static void glad_close_dlopen_handle(void* handle) {
+    if (handle != NULL) {
+#if GLAD_PLATFORM_WIN32
+        FreeLibrary((HMODULE) handle);
+#else
+        dlclose(handle);
+#endif
+    }
+}
+
+static GLADapiproc glad_dlsym_handle(void* handle, const char *name) {
+    if (handle == NULL) {
+        return NULL;
+    }
+
+#if GLAD_PLATFORM_WIN32
+    return (GLADapiproc) GetProcAddress((HMODULE) handle, name);
+#else
+    return GLAD_GNUC_EXTENSION (GLADapiproc) dlsym(handle, name);
+#endif
+}
+
+#endif /* GLAD_LOADER_LIBRARY_C_ */
+
+typedef void* (GLAD_API_PTR *GLADglprocaddrfunc)(const char*);
+struct _glad_gl_userptr {
+    void *handle;
+    GLADglprocaddrfunc gl_get_proc_address_ptr;
+};
+
+static GLADapiproc glad_gl_get_proc(void *vuserptr, const char *name) {
+    struct _glad_gl_userptr userptr = *(struct _glad_gl_userptr*) vuserptr;
+    GLADapiproc result = NULL;
+
+    if(userptr.gl_get_proc_address_ptr != NULL) {
+        result = GLAD_GNUC_EXTENSION (GLADapiproc) userptr.gl_get_proc_address_ptr(name);
+    }
+    if(result == NULL) {
+        result = glad_dlsym_handle(userptr.handle, name);
+    }
+
+    return result;
+}
+
+static void* _gl_handle = NULL;
+
+static void* glad_gl_dlopen_handle(void) {
+#if GLAD_PLATFORM_APPLE
+    static const char *NAMES[] = {
+        "../Frameworks/OpenGL.framework/OpenGL",
+        "/Library/Frameworks/OpenGL.framework/OpenGL",
+        "/System/Library/Frameworks/OpenGL.framework/OpenGL",
+        "/System/Library/Frameworks/OpenGL.framework/Versions/Current/OpenGL"
+    };
+#elif GLAD_PLATFORM_WIN32
+    static const char *NAMES[] = {"opengl32.dll"};
+#else
+    static const char *NAMES[] = {
+  #if defined(__CYGWIN__)
+        "libGL-1.so",
+  #endif
+        "libGL.so.1",
+        "libGL.so"
+    };
+#endif
+
+    if (_gl_handle == NULL) {
+        _gl_handle = glad_get_dlopen_handle(NAMES, sizeof(NAMES) / sizeof(NAMES[0]));
+    }
+
+    return _gl_handle;
+}
+
+static struct _glad_gl_userptr glad_gl_build_userptr(void *handle) {
+    struct _glad_gl_userptr userptr;
+
+    userptr.handle = handle;
+#if GLAD_PLATFORM_APPLE || defined(__HAIKU__)
+    userptr.gl_get_proc_address_ptr = NULL;
+#elif GLAD_PLATFORM_WIN32
+    userptr.gl_get_proc_address_ptr =
+        (GLADglprocaddrfunc) glad_dlsym_handle(handle, "wglGetProcAddress");
+#else
+    userptr.gl_get_proc_address_ptr =
+        (GLADglprocaddrfunc) glad_dlsym_handle(handle, "glXGetProcAddressARB");
+#endif
+
+    return userptr;
+}
+
+int gladLoaderLoadGL(void) {
+    int version = 0;
+    void *handle;
+    int did_load = 0;
+    struct _glad_gl_userptr userptr;
+
+    did_load = _gl_handle == NULL;
+    handle = glad_gl_dlopen_handle();
+    if (handle) {
+        userptr = glad_gl_build_userptr(handle);
+
+        version = gladLoadGLUserPtr(glad_gl_get_proc, &userptr);
+
+        if (did_load) {
+            gladLoaderUnloadGL();
+        }
+    }
+
+    return version;
+}
+
+
+
+void gladLoaderUnloadGL(void) {
+    if (_gl_handle != NULL) {
+        glad_close_dlopen_handle(_gl_handle);
+        _gl_handle = NULL;
+    }
+}
+
+#endif /* GLAD_GL */
+#ifdef GLAD_GLES2
+
+#ifndef GLAD_LOADER_LIBRARY_C_
+#define GLAD_LOADER_LIBRARY_C_
+
+#include <stddef.h>
+#include <stdlib.h>
+
+#if GLAD_PLATFORM_WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
+
+
+static void* glad_get_dlopen_handle(const char *lib_names[], int length) {
+    void *handle = NULL;
+    int i;
+
+    for (i = 0; i < length; ++i) {
+#if GLAD_PLATFORM_WIN32
+  #if GLAD_PLATFORM_UWP
+        size_t buffer_size = (strlen(lib_names[i]) + 1) * sizeof(WCHAR);
+        LPWSTR buffer = (LPWSTR) malloc(buffer_size);
+        if (buffer != NULL) {
+            int ret = MultiByteToWideChar(CP_ACP, 0, lib_names[i], -1, buffer, buffer_size);
+            if (ret != 0) {
+                handle = (void*) LoadPackagedLibrary(buffer, 0);
+            }
+            free((void*) buffer);
+        }
+  #else
+        handle = (void*) LoadLibraryA(lib_names[i]);
+  #endif
+#else
+        handle = dlopen(lib_names[i], RTLD_LAZY | RTLD_LOCAL);
+#endif
+        if (handle != NULL) {
+            return handle;
+        }
+    }
+
+    return NULL;
+}
+
+static void glad_close_dlopen_handle(void* handle) {
+    if (handle != NULL) {
+#if GLAD_PLATFORM_WIN32
+        FreeLibrary((HMODULE) handle);
+#else
+        dlclose(handle);
+#endif
+    }
+}
+
+static GLADapiproc glad_dlsym_handle(void* handle, const char *name) {
+    if (handle == NULL) {
+        return NULL;
+    }
+
+#if GLAD_PLATFORM_WIN32
+    return (GLADapiproc) GetProcAddress((HMODULE) handle, name);
+#else
+    return GLAD_GNUC_EXTENSION (GLADapiproc) dlsym(handle, name);
+#endif
+}
+
+#endif /* GLAD_LOADER_LIBRARY_C_ */
+
+#if GLAD_PLATFORM_EMSCRIPTEN
+  typedef void* (GLAD_API_PTR *PFNEGLGETPROCADDRESSPROC)(const char *name);
+  extern void* emscripten_GetProcAddress(const char *name);
+#else
+  #include <glad/egl.h>
+#endif
+
+
+struct _glad_gles2_userptr {
+    void *handle;
+    PFNEGLGETPROCADDRESSPROC get_proc_address_ptr;
+};
+
+
+static GLADapiproc glad_gles2_get_proc(void *vuserptr, const char* name) {
+    struct _glad_gles2_userptr userptr = *(struct _glad_gles2_userptr*) vuserptr;
+    GLADapiproc result = NULL;
+
+#if !GLAD_PLATFORM_EMSCRIPTEN
+    result = glad_dlsym_handle(userptr.handle, name);
+#endif
+    if (result == NULL) {
+        result = userptr.get_proc_address_ptr(name);
+    }
+
+    return result;
+}
+
+static void* _gles2_handle = NULL;
+
+static void* glad_gles2_dlopen_handle(void) {
+#if GLAD_PLATFORM_EMSCRIPTEN
+#elif GLAD_PLATFORM_APPLE
+    static const char *NAMES[] = {"libGLESv2.dylib"};
+#elif GLAD_PLATFORM_WIN32
+    static const char *NAMES[] = {"GLESv2.dll", "libGLESv2.dll"};
+#else
+    static const char *NAMES[] = {"libGLESv2.so.2", "libGLESv2.so"};
+#endif
+
+#if GLAD_PLATFORM_EMSCRIPTEN
+    return NULL;
+#else
+    if (_gles2_handle == NULL) {
+        _gles2_handle = glad_get_dlopen_handle(NAMES, sizeof(NAMES) / sizeof(NAMES[0]));
+    }
+
+    return _gles2_handle;
+#endif
+}
+
+static struct _glad_gles2_userptr glad_gles2_build_userptr(void *handle) {
+    struct _glad_gles2_userptr userptr;
+#if GLAD_PLATFORM_EMSCRIPTEN
+    userptr.get_proc_address_ptr = emscripten_GetProcAddress;
+#else
+    userptr.handle = handle;
+    userptr.get_proc_address_ptr = eglGetProcAddress;
+#endif
+    return userptr;
+}
+
+int gladLoaderLoadGLES2(void) {
+    int version = 0;
+    void *handle = NULL;
+    int did_load = 0;
+    struct _glad_gles2_userptr userptr;
+
+#if GLAD_PLATFORM_EMSCRIPTEN
+    userptr.get_proc_address_ptr = emscripten_GetProcAddress;
+    version = gladLoadGLES2UserPtr(glad_gles2_get_proc, &userptr);
+#else
+    if (eglGetProcAddress == NULL) {
+        return 0;
+    }
+
+    did_load = _gles2_handle == NULL;
+    handle = glad_gles2_dlopen_handle();
+    if (handle != NULL) {
+        userptr = glad_gles2_build_userptr(handle);
+
+        version = gladLoadGLES2UserPtr(glad_gles2_get_proc, &userptr);
+
+        if (!version && did_load) {
+            gladLoaderUnloadGLES2();
+        }
+    }
+#endif
+
+    return version;
+}
+
+
+
+void gladLoaderUnloadGLES2(void) {
+    if (_gles2_handle != NULL) {
+        glad_close_dlopen_handle(_gles2_handle);
+        _gles2_handle = NULL;
+    }
+}
+
+#endif /* GLAD_GLES2 */
 
 #ifdef __cplusplus
 }
