@@ -21,6 +21,7 @@
 
 #include "guiengine/engine.hpp"
 #include "glad/gl.h"
+#include "mac_vulkan.h"
 
 extern bool GLContextDebugBit;
 
@@ -359,7 +360,16 @@ bool CIrrDeviceSDL::createWindow()
 		CreationParams.DriverType == video::EDT_OGLES2)
 		flags |= SDL_WINDOW_OPENGL;
 	else if (CreationParams.DriverType == video::EDT_VULKAN)
+	{
+#if defined(__APPLE__) && !defined(IOS_STK)
+		if (!MacVulkan::supportsVulkan())
+		{
+			os::Printer::log("Current MacOSX version doesn't support vulkan", ELL_WARNING);
+			return false;
+		}
+#endif
 		flags |= SDL_WINDOW_VULKAN;
+	}
 
 #ifdef MOBILE_STK
 	flags |= SDL_WINDOW_BORDERLESS | SDL_WINDOW_MAXIMIZED;

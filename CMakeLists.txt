@@ -674,8 +674,12 @@ else()
 endif()
 
 if(NOT SERVER_ONLY)
+    if (APPLE)
+        find_library(MOLTENVK_LIBRARY NAMES MoltenVK libMoltenVK REQUIRED)
+        target_link_libraries(supertuxkart "-weak_framework Metal -weak_framework IOSurface -framework QuartzCore ${MOLTENVK_LIBRARY}")
+    endif()
     if (IOS)
-        target_link_libraries(supertuxkart "-weak_framework CoreHaptics -framework QuartzCore -framework CoreGraphics -framework AVFoundation -framework AudioToolbox -framework Metal -framework GameController -framework OpenGLES -framework UIKit -framework CoreAudio -framework Foundation -framework GLKit")
+        target_link_libraries(supertuxkart "-weak_framework CoreHaptics -framework CoreGraphics -framework AVFoundation -framework AudioToolbox -framework GameController -framework OpenGLES -framework UIKit -framework CoreAudio -framework Foundation -framework GLKit")
         # tvOS doesn't have CoreMotion framwork
         include(CheckCSourceCompiles)
         set(prev_req_lib ${CMAKE_REQUIRED_LIBRARIES})

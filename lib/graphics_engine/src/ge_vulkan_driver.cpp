@@ -8,6 +8,7 @@
 
 #include "../source/Irrlicht/os.h"
 
+#ifndef __APPLE__
 extern "C" PFN_vkVoidFunction _vk_getInstanceProcAddr(VkInstance instance,
                                                       const char* name)
 {
@@ -33,6 +34,7 @@ extern "C" PFN_vkVoidFunction _vk_getInstanceProcAddr(VkInstance instance,
         return NULL;
     return f(instance, name);
 }   // _vk_getInstanceProcAddr
+#endif
 
 namespace GE
 {
@@ -48,24 +50,30 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
     m_features = {};
 
     createInstance(window);
+
+#ifndef __APPLE__
     if (gladLoadVulkanUserPtr(NULL,
         (GLADuserptrloadfunc)_vk_getInstanceProcAddr, m_vk.instance) == 0)
     {
         throw std::runtime_error("gladLoadVulkanUserPtr failed "
             "with non-NULL instance");
     }
+#endif
+
     if (SDL_Vulkan_CreateSurface(window, m_vk.instance, &m_vk.surface) == SDL_FALSE)
         throw std::runtime_error("SDL_Vulkan_CreateSurface failed");
     m_device_extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     findPhysicalDevice();
     createDevice();
 
+#ifndef __APPLE__
     if (gladLoadVulkanUserPtr(m_physical_device,
         (GLADuserptrloadfunc)_vk_getInstanceProcAddr, m_vk.instance) == 0)
     {
         throw std::runtime_error("gladLoadVulkanUserPtr failed with "
             "non-NULL instance and non-NULL m_physical_device");
     }
+#endif
 
     vkGetPhysicalDeviceProperties(m_physical_device, &m_properties);
     os::Printer::log("Vulkan version", getVulkanVersionString().c_str());
@@ -84,11 +92,14 @@ GEVulkanDriver::~GEVulkanDriver()
 // ----------------------------------------------------------------------------
 void GEVulkanDriver::createInstance(SDL_Window* window)
 {
+#ifndef __APPLE__
     if (gladLoadVulkanUserPtr(NULL,
         (GLADuserptrloadfunc)_vk_getInstanceProcAddr, NULL) == 0)
     {
         throw std::runtime_error("gladLoadVulkanUserPtr failed 1st time");
     }
+#endif
+
     unsigned int count = 0;
     if (!SDL_Vulkan_GetInstanceExtensions(window, &count, NULL))
         throw std::runtime_error("SDL_Vulkan_GetInstanceExtensions failed with NULL extensions");
