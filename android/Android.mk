@@ -180,6 +180,46 @@ $(call import-module, third_party/shaderc)
 include $(CLEAR_VARS)
 
 
+# Occulsion culling
+LOCAL_MODULE       := occlusion_culling
+LOCAL_PATH         := .
+LOCAL_CPP_FEATURES += rtti exceptions
+LOCAL_SRC_FILES    := $(wildcard ../lib/occlusion_culling/src/*.cpp)
+LOCAL_CFLAGS       := -I../lib/occlusion_culling/include  \
+                      -I../lib/graphics_engine/include    \
+                      -I../lib/irrlicht/include
+ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
+LOCAL_ARM_NEON     := false
+endif
+include $(BUILD_STATIC_LIBRARY)
+include $(CLEAR_VARS)
+
+
+# Occulsion culling (sse files)
+LOCAL_MODULE       := occlusion_culling_sse
+LOCAL_PATH         := .
+LOCAL_CPP_FEATURES += rtti exceptions
+LOCAL_SRC_FILES    := $(wildcard ../lib/occlusion_culling/src/sse/*.cpp)
+LOCAL_CFLAGS       := -I../lib/occlusion_culling/src  \
+                      -I../lib/sdl2/include           \
+                      -I../lib
+# Neon is on only for this subfolder
+ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
+LOCAL_ARM_NEON     := true
+endif
+ifeq ($(TARGET_ARCH_ABI), arm64-v8a)
+LOCAL_ARM_NEON     := true
+endif
+ifeq ($(TARGET_ARCH_ABI), x86)
+LOCAL_CFLAGS       += -msse4.1
+endif
+ifeq ($(TARGET_ARCH_ABI), x86_64)
+LOCAL_CFLAGS       += -msse4.1
+endif
+include $(BUILD_STATIC_LIBRARY)
+include $(CLEAR_VARS)
+
+
 # MCPP
 LOCAL_MODULE       := mcpp
 LOCAL_PATH         := .
@@ -305,19 +345,20 @@ LOCAL_SRC_FILES    := $(wildcard ../src/*.cpp)     \
                       $(wildcard ../src/*/*.cpp)   \
                       $(wildcard ../src/*/*/*.cpp)
 LOCAL_LDLIBS       := -llog -lm -lOpenSLES
-LOCAL_CFLAGS       := -I../lib/angelscript/include      \
-                      -I../lib/bullet/src               \
-                      -I../lib/sheenbidi/Headers        \
-                      -I../lib/enet/include             \
-                      -I../lib/ifaddrs                  \
-                      -I../lib/irrlicht/include         \
-                      -I../lib/irrlicht/source/Irrlicht \
-                      -I../lib/graphics_utils           \
-                      -I../lib/graphics_engine/include  \
-                      -I../lib/mcpp                     \
-                      -I../lib/sdl2/include             \
-                      -I../lib/tinygettext/include      \
-                      -I../src                          \
+LOCAL_CFLAGS       := -I../lib/angelscript/include       \
+                      -I../lib/bullet/src                \
+                      -I../lib/sheenbidi/Headers         \
+                      -I../lib/enet/include              \
+                      -I../lib/ifaddrs                   \
+                      -I../lib/irrlicht/include          \
+                      -I../lib/irrlicht/source/Irrlicht  \
+                      -I../lib/graphics_utils            \
+                      -I../lib/graphics_engine/include   \
+                      -I../lib/occlusion_culling/include \
+                      -I../lib/mcpp                      \
+                      -I../lib/sdl2/include              \
+                      -I../lib/tinygettext/include       \
+                      -I../src                           \
                       -Ideps-$(TARGET_ARCH_ABI)/curl/include      \
                       -Ideps-$(TARGET_ARCH_ABI)/freetype/include  \
                       -Ideps-$(TARGET_ARCH_ABI)/harfbuzz/include  \
@@ -342,7 +383,8 @@ LOCAL_STATIC_LIBRARIES := irrlicht bullet enet ifaddrs angelscript mcpp SDL2 \
                           vorbisfile vorbis ogg openal curl libmbedtls       \
                           libmbedcrypto libmbedx509 c++_static sheenbidi     \
                           harfbuzz freetype tinygettext graphics_utils       \
-                          graphics_engine
+                          graphics_engine occlusion_culling                  \
+                          occlusion_culling_sse
 
 ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
 LOCAL_ARM_NEON     := false

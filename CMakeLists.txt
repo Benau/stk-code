@@ -354,6 +354,11 @@ if (NOT SERVER_ONLY)
     endif()
 endif()
 
+if(NOT SERVER_ONLY)
+    add_subdirectory("${PROJECT_SOURCE_DIR}/lib/occlusion_culling")
+    include_directories(BEFORE "${PROJECT_SOURCE_DIR}/lib/occlusion_culling/include")
+endif()
+
 # Build the irrlicht library
 add_subdirectory("${PROJECT_SOURCE_DIR}/lib/irrlicht")
 include_directories(BEFORE "${PROJECT_SOURCE_DIR}/lib/irrlicht/include")
@@ -769,6 +774,7 @@ if(NOT SERVER_ONLY)
         ${SHEENBIDI_LIBRARY}
         graphics_utils
         graphics_engine
+        occlusion_culling
         ${SDL2_LIBRARY}
         tinygettext
         ${SHADERC_LIBRARY})
