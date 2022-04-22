@@ -40,7 +40,7 @@ MaskedOcclusionCulling::Implementation DetectCPUFeatures(MaskedOcclusionCulling:
 		return MaskedOcclusionCulling::SSE2;
 	return MaskedOcclusionCulling::UNSUPPORTED;
 
-#elif defined(SIMDE_ARCH_ARM_NEON)
+#elif defined(SIMDE_ARCH_ARM_NEON) && !defined(SIMDE_NO_NATIVE)
 	// We use simde for arm with sse to neon so returns the fastest method
 	// if neon is available
 	if (SDL_HasNEON() == SDL_TRUE)
