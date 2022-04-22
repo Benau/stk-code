@@ -69,6 +69,10 @@ void MaskedOcclusionCulling::TransformVertices(const float *mtx, const float *in
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// SSE2 version
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Typedefs
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,186 +80,10 @@ typedef MaskedOcclusionCulling::pfnAlignedAlloc pfnAlignedAlloc;
 typedef MaskedOcclusionCulling::pfnAlignedFree  pfnAlignedFree;
 typedef MaskedOcclusionCulling::VertexLayout    VertexLayout;
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Common SSE2/SSE4.1 defines
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#define SIMD_LANES             4
-#define TILE_HEIGHT_SHIFT      2
-
-#define SIMD_LANE_IDX _mm_setr_epi32(0, 1, 2, 3)
-
-#define SIMD_SUB_TILE_COL_OFFSET _mm_setr_epi32(0, SUB_TILE_WIDTH, SUB_TILE_WIDTH * 2, SUB_TILE_WIDTH * 3)
-#define SIMD_SUB_TILE_ROW_OFFSET _mm_setzero_si128()
-#define SIMD_SUB_TILE_COL_OFFSET_F _mm_setr_ps(0, SUB_TILE_WIDTH, SUB_TILE_WIDTH * 2, SUB_TILE_WIDTH * 3)
-#define SIMD_SUB_TILE_ROW_OFFSET_F _mm_setzero_ps()
-
-#define SIMD_LANE_YCOORD_I _mm_setr_epi32(128, 384, 640, 896)
-#define SIMD_LANE_YCOORD_F _mm_setr_ps(128.0f, 384.0f, 640.0f, 896.0f)
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Common SSE2/SSE4.1 functions
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-typedef __m128 __mw;
-typedef __m128i __mwi;
-
-#define _mmw_set1_ps                _mm_set1_ps
-#define _mmw_setzero_ps             _mm_setzero_ps
-#define _mmw_and_ps                 _mm_and_ps
-#define _mmw_or_ps                  _mm_or_ps
-#define _mmw_xor_ps                 _mm_xor_ps
-#define _mmw_not_ps(a)              _mm_xor_ps((a), _mm_castsi128_ps(_mm_set1_epi32(~0)))
-#define _mmw_andnot_ps              _mm_andnot_ps
-#define _mmw_neg_ps(a)              _mm_xor_ps((a), _mm_set1_ps(-0.0f))
-#define _mmw_abs_ps(a)              _mm_and_ps((a), _mm_castsi128_ps(_mm_set1_epi32(0x7FFFFFFF)))
-#define _mmw_add_ps                 _mm_add_ps
-#define _mmw_sub_ps                 _mm_sub_ps
-#define _mmw_mul_ps                 _mm_mul_ps
-#define _mmw_div_ps                 _mm_div_ps
-#define _mmw_min_ps                 _mm_min_ps
-#define _mmw_max_ps                 _mm_max_ps
-#define _mmw_movemask_ps            _mm_movemask_ps
-#define _mmw_cmpge_ps(a,b)          _mm_cmpge_ps(a, b)
-#define _mmw_cmpgt_ps(a,b)          _mm_cmpgt_ps(a, b)
-#define _mmw_cmpeq_ps(a,b)          _mm_cmpeq_ps(a, b)
-#define _mmw_fmadd_ps(a,b,c)        _mm_add_ps(_mm_mul_ps(a,b), c)
-#define _mmw_fmsub_ps(a,b,c)        _mm_sub_ps(_mm_mul_ps(a,b), c)
-#define _mmw_shuffle_ps             _mm_shuffle_ps
-#define _mmw_insertf32x4_ps(a,b,c)  (b)
-#define _mmw_cvtepi32_ps            _mm_cvtepi32_ps
-#define _mmw_blendv_epi32(a,b,c)    simd_cast<__mwi>(_mmw_blendv_ps(simd_cast<__mw>(a), simd_cast<__mw>(b), simd_cast<__mw>(c)))
-
-#define _mmw_set1_epi32             _mm_set1_epi32
-#define _mmw_setzero_epi32          _mm_setzero_si128
-#define _mmw_and_epi32              _mm_and_si128
-#define _mmw_or_epi32               _mm_or_si128
-#define _mmw_xor_epi32              _mm_xor_si128
-#define _mmw_not_epi32(a)           _mm_xor_si128((a), _mm_set1_epi32(~0))
-#define _mmw_andnot_epi32           _mm_andnot_si128
-#define _mmw_neg_epi32(a)           _mm_sub_epi32(_mm_set1_epi32(0), (a))
-#define _mmw_add_epi32              _mm_add_epi32
-#define _mmw_sub_epi32              _mm_sub_epi32
-#define _mmw_subs_epu16             _mm_subs_epu16
-#define _mmw_cmpeq_epi32            _mm_cmpeq_epi32
-#define _mmw_cmpgt_epi32            _mm_cmpgt_epi32
-#define _mmw_srai_epi32             _mm_srai_epi32
-#define _mmw_srli_epi32             _mm_srli_epi32
-#define _mmw_slli_epi32             _mm_slli_epi32
-#define _mmw_cvtps_epi32            _mm_cvtps_epi32
-#define _mmw_cvttps_epi32           _mm_cvttps_epi32
-
-#define _mmx_fmadd_ps               _mmw_fmadd_ps
-#define _mmx_max_epi32              _mmw_max_epi32
-#define _mmx_min_epi32              _mmw_min_epi32
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// SIMD casting functions
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-template<typename T, typename Y> FORCE_INLINE T simd_cast(Y A);
-template<> FORCE_INLINE __m128  simd_cast<__m128>(float A) { return _mm_set1_ps(A); }
-template<> FORCE_INLINE __m128  simd_cast<__m128>(__m128i A) { return _mm_castsi128_ps(A); }
-template<> FORCE_INLINE __m128  simd_cast<__m128>(__m128 A) { return A; }
-template<> FORCE_INLINE __m128i simd_cast<__m128i>(int A) { return _mm_set1_epi32(A); }
-template<> FORCE_INLINE __m128i simd_cast<__m128i>(__m128 A) { return _mm_castps_si128(A); }
-template<> FORCE_INLINE __m128i simd_cast<__m128i>(__m128i A) { return A; }
-
-#define MAKE_ACCESSOR(name, simd_type, base_type, is_const, elements) \
-	FORCE_INLINE is_const base_type * name(is_const simd_type &a) { \
-		union accessor { simd_type m_native; base_type m_array[elements]; }; \
-		is_const accessor *acs = reinterpret_cast<is_const accessor*>(&a); \
-		return acs->m_array; \
-	}
-
-MAKE_ACCESSOR(simd_f32, __m128, float, , 4)
-MAKE_ACCESSOR(simd_f32, __m128, float, const, 4)
-MAKE_ACCESSOR(simd_i32, __m128i, int, , 4)
-MAKE_ACCESSOR(simd_i32, __m128i, int, const, 4)
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Specialized SSE input assembly function for general vertex gather 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-FORCE_INLINE void GatherVertices(__m128 *vtxX, __m128 *vtxY, __m128 *vtxW, const float *inVtx, const unsigned int *inTrisPtr, int numLanes, const VertexLayout &vtxLayout)
-{
-	for (int lane = 0; lane < numLanes; lane++)
-	{
-		for (int i = 0; i < 3; i++)
-		{
-			char *vPtrX = (char *)inVtx + inTrisPtr[lane * 3 + i] * vtxLayout.mStride;
-			char *vPtrY = vPtrX + vtxLayout.mOffsetY;
-			char *vPtrW = vPtrX + vtxLayout.mOffsetW;
-
-			simd_f32(vtxX[i])[lane] = *((float*)vPtrX);
-			simd_f32(vtxY[i])[lane] = *((float*)vPtrY);
-			simd_f32(vtxW[i])[lane] = *((float*)vPtrW);
-		}
-	}
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// SSE4.1 version
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-namespace MaskedOcclusionCullingSSE41
-{
-	FORCE_INLINE __m128i _mmw_mullo_epi32(const __m128i &a, const __m128i &b) { return _mm_mullo_epi32(a, b); }
-	FORCE_INLINE __m128i _mmw_min_epi32(const __m128i &a, const __m128i &b) { return _mm_min_epi32(a, b); }
-	FORCE_INLINE __m128i _mmw_max_epi32(const __m128i &a, const __m128i &b) { return _mm_max_epi32(a, b); }
-	FORCE_INLINE __m128i _mmw_abs_epi32(const __m128i &a) { return _mm_abs_epi32(a); }
-	FORCE_INLINE __m128 _mmw_blendv_ps(const __m128 &a, const __m128 &b, const __m128 &c) { return _mm_blendv_ps(a, b, c); }
-	FORCE_INLINE int _mmw_testz_epi32(const __m128i &a, const __m128i &b) { return _mm_testz_si128(a, b); }
-	FORCE_INLINE __m128 _mmx_dp4_ps(const __m128 &a, const __m128 &b) { return _mm_dp_ps(a, b, 0xFF); }
-	FORCE_INLINE __m128 _mmw_floor_ps(const __m128 &a) { return _mm_round_ps(a, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC); }
-	FORCE_INLINE __m128 _mmw_ceil_ps(const __m128 &a) { return _mm_round_ps(a, _MM_FROUND_TO_POS_INF | _MM_FROUND_NO_EXC);	}
-	FORCE_INLINE __m128i _mmw_transpose_epi8(const __m128i &a)
-	{
-		const __m128i shuff = _mm_setr_epi8(0x0, 0x4, 0x8, 0xC, 0x1, 0x5, 0x9, 0xD, 0x2, 0x6, 0xA, 0xE, 0x3, 0x7, 0xB, 0xF);
-		return _mm_shuffle_epi8(a, shuff);
-	}
-	FORCE_INLINE __m128i _mmw_sllv_ones(const __m128i &ishift)
-	{
-		__m128i shift = _mm_min_epi32(ishift, _mm_set1_epi32(32));
-
-		// Uses lookup tables and _mm_shuffle_epi8 to perform _mm_sllv_epi32(~0, shift)
-		const __m128i byteShiftLUT = _mm_setr_epi8((char)0xFF, (char)0xFE, (char)0xFC, (char)0xF8, (char)0xF0, (char)0xE0, (char)0xC0, (char)0x80, 0, 0, 0, 0, 0, 0, 0, 0);
-		const __m128i byteShiftOffset = _mm_setr_epi8(0, 8, 16, 24, 0, 8, 16, 24, 0, 8, 16, 24, 0, 8, 16, 24);
-		const __m128i byteShiftShuffle = _mm_setr_epi8(0x0, 0x0, 0x0, 0x0, 0x4, 0x4, 0x4, 0x4, 0x8, 0x8, 0x8, 0x8, 0xC, 0xC, 0xC, 0xC);
-
-		__m128i byteShift = _mm_shuffle_epi8(shift, byteShiftShuffle);
-		byteShift = _mm_min_epi8(_mm_subs_epu8(byteShift, byteShiftOffset), _mm_set1_epi8(8));
-		__m128i retMask = _mm_shuffle_epi8(byteShiftLUT, byteShift);
-
-		return retMask;
-	}
-
-	static MaskedOcclusionCulling::Implementation gInstructionSet = MaskedOcclusionCulling::SSE41;
-
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Include common algorithm implementation (general, SIMD independent code)
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	#include "MaskedOcclusionCullingCommon.inl"
-
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Utility function to create a new object using the allocator callbacks
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree)
-	{
-		MaskedOcclusionCullingPrivate *object = (MaskedOcclusionCullingPrivate *)alignedAlloc(64, sizeof(MaskedOcclusionCullingPrivate));
-		new (object) MaskedOcclusionCullingPrivate(alignedAlloc, alignedFree);
-		return object;
-	}
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// SSE2 version
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 namespace MaskedOcclusionCullingSSE2
 {
+	#include "MaskedOcclusionCullingCommonSSE.inl"
+
 	FORCE_INLINE __m128i _mmw_mullo_epi32(const __m128i &a, const __m128i &b)
 	{ 
 		// Do products for even / odd lanes & merge the result
@@ -361,6 +189,11 @@ namespace MaskedOcclusionCullingSSE2
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Object construction and allocation
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+namespace MaskedOcclusionCullingSSE41
+{
+	extern MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree);
+};
+
 namespace MaskedOcclusionCullingAVX512
 {
 	extern MaskedOcclusionCulling *CreateMaskedOcclusionCulling(pfnAlignedAlloc alignedAlloc, pfnAlignedFree alignedFree);

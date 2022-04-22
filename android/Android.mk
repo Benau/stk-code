@@ -195,13 +195,37 @@ include $(BUILD_STATIC_LIBRARY)
 include $(CLEAR_VARS)
 
 
-# Occulsion culling (sse files)
-LOCAL_MODULE       := occlusion_culling_sse
+# Occulsion culling (sse2 files)
+LOCAL_MODULE       := occlusion_culling_sse2
 LOCAL_PATH         := .
 LOCAL_CPP_FEATURES += rtti exceptions
-LOCAL_SRC_FILES    := $(wildcard ../lib/occlusion_culling/src/sse/*.cpp)
+LOCAL_SRC_FILES    := $(wildcard ../lib/occlusion_culling/src/sse2/*.cpp)
 LOCAL_CFLAGS       := -I../lib/occlusion_culling/src  \
                       -I../lib/sdl2/include           \
+                      -I../lib
+# Neon is on only for this subfolder
+ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
+LOCAL_ARM_NEON     := true
+endif
+ifeq ($(TARGET_ARCH_ABI), arm64-v8a)
+LOCAL_ARM_NEON     := true
+endif
+ifeq ($(TARGET_ARCH_ABI), x86)
+LOCAL_CFLAGS       += -msse2
+endif
+ifeq ($(TARGET_ARCH_ABI), x86_64)
+LOCAL_CFLAGS       += -msse2
+endif
+include $(BUILD_STATIC_LIBRARY)
+include $(CLEAR_VARS)
+
+
+# Occulsion culling (sse4.1 files)
+LOCAL_MODULE       := occlusion_culling_sse41
+LOCAL_PATH         := .
+LOCAL_CPP_FEATURES += rtti exceptions
+LOCAL_SRC_FILES    := $(wildcard ../lib/occlusion_culling/src/sse41/*.cpp)
+LOCAL_CFLAGS       := -I../lib/occlusion_culling/src  \
                       -I../lib
 # Neon is on only for this subfolder
 ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
@@ -384,7 +408,7 @@ LOCAL_STATIC_LIBRARIES := irrlicht bullet enet ifaddrs angelscript mcpp SDL2 \
                           libmbedcrypto libmbedx509 c++_static sheenbidi     \
                           harfbuzz freetype tinygettext graphics_utils       \
                           graphics_engine occlusion_culling                  \
-                          occlusion_culling_sse
+                          occlusion_culling_sse2 occlusion_culling_sse41
 
 ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
 LOCAL_ARM_NEON     := false
