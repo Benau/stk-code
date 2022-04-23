@@ -46,7 +46,7 @@
 
 #endif
 
-#include "simde/x86/sse4.1.h"
+#include "simde/x86/svml.h"
 
 #else
 

@@ -223,6 +223,8 @@ MaskedOcclusionCulling *MaskedOcclusionCulling::Create(Implementation RequestedS
 		impl = RequestedSIMD;
 
 	// Return best supported version
+	if (object == nullptr && impl >= AVX2)
+		object = MaskedOcclusionCullingAVX2::CreateMaskedOcclusionCulling(alignedAlloc, alignedFree); // Use AVX2 version
 	if (object == nullptr && impl >= SSE41)
 		object = MaskedOcclusionCullingSSE41::CreateMaskedOcclusionCulling(alignedAlloc, alignedFree); // Use SSE4.1 version
 	if (object == nullptr)

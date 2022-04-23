@@ -31,9 +31,14 @@
 // This file needs to be put inside sse folder so neon is on for android
 MaskedOcclusionCulling::Implementation DetectCPUFeatures(MaskedOcclusionCulling::pfnAlignedAlloc alignedAlloc, MaskedOcclusionCulling::pfnAlignedFree alignedFree)
 {
+	// When using simde uses the one with the most conversion supported
+	// AVX2 at the moment has little neon conversion, so using AVX2 will be
+	// slower with simde
 	MaskedOcclusionCulling::Implementation fastest = MaskedOcclusionCulling::SSE41;
 
 #if defined(OC_NATIVE_SIMD)
+	if (SDL_HasAVX2() == SDL_TRUE)
+		return MaskedOcclusionCulling::AVX2;
 	if (SDL_HasSSE41() == SDL_TRUE)
 		return MaskedOcclusionCulling::SSE41;
 	if (SDL_HasSSE2() == SDL_TRUE)

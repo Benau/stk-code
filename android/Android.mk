@@ -244,6 +244,30 @@ include $(BUILD_STATIC_LIBRARY)
 include $(CLEAR_VARS)
 
 
+# Occulsion culling (avx2 files)
+LOCAL_MODULE       := occlusion_culling_avx2
+LOCAL_PATH         := .
+LOCAL_CPP_FEATURES += rtti exceptions
+LOCAL_SRC_FILES    := $(wildcard ../lib/occlusion_culling/src/avx2/*.cpp)
+LOCAL_CFLAGS       := -I../lib/occlusion_culling/src  \
+                      -I../lib
+# Neon is on only for this subfolder
+ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
+LOCAL_ARM_NEON     := true
+endif
+ifeq ($(TARGET_ARCH_ABI), arm64-v8a)
+LOCAL_ARM_NEON     := true
+endif
+ifeq ($(TARGET_ARCH_ABI), x86)
+LOCAL_CFLAGS       += -mavx2 -mfma -msse4.1
+endif
+ifeq ($(TARGET_ARCH_ABI), x86_64)
+LOCAL_CFLAGS       += -mavx2 -mfma -msse4.1
+endif
+include $(BUILD_STATIC_LIBRARY)
+include $(CLEAR_VARS)
+
+
 # MCPP
 LOCAL_MODULE       := mcpp
 LOCAL_PATH         := .
@@ -408,7 +432,8 @@ LOCAL_STATIC_LIBRARIES := irrlicht bullet enet ifaddrs angelscript mcpp SDL2 \
                           libmbedcrypto libmbedx509 c++_static sheenbidi     \
                           harfbuzz freetype tinygettext graphics_utils       \
                           graphics_engine occlusion_culling                  \
-                          occlusion_culling_sse2 occlusion_culling_sse41
+                          occlusion_culling_sse2 occlusion_culling_sse41     \
+                          occlusion_culling_avx2
 
 ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
 LOCAL_ARM_NEON     := false
