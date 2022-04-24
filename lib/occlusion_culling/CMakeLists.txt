@@ -23,6 +23,7 @@ set(OCCLUSION_CULLING_SOURCES
     ${MOC_SSE41_FILES}
     ${MOC_AVX2_FILES}
     src/CullingThreadpool.cpp
+    src/occlusion_culling.cpp
 )
 
 if(MSVC)

@@ -99,6 +99,7 @@
 #ifndef SERVER_ONLY
 #include <ge_main.hpp>
 #include <ge_texture.hpp>
+#include <occlusion_culling.hpp>
 #endif
 
 using namespace irr;
@@ -309,6 +310,9 @@ void Track::reset()
  */
 void Track::cleanup()
 {
+#ifndef SERVER_ONLY
+    OcclusionCulling::stop();
+#endif
     irr_driver->resetSceneComplexity();
     m_physical_object_uid = 0;
 #ifdef USE_RESIZE_CACHE
@@ -920,8 +924,9 @@ void Track::createPhysicsModel(unsigned int main_track_count)
 /** Convert the graohics track into its physics equivalents.
  *  \param mesh The mesh to convert.
  *  \param node The scene node.
+ *  \param occluder Add for occlusion culling.
  */
-void Track::convertTrackToBullet(scene::ISceneNode *node)
+void Track::convertTrackToBullet(scene::ISceneNode *node, bool occluder)
 {
     if (node->getType() == scene::ESNT_TEXT)
         return;
@@ -1020,7 +1025,18 @@ void Track::convertTrackToBullet(scene::ISceneNode *node)
                         vertices[k] = v;
                         normals[k] = MiniGLM::decompressVector3(mbVertices[indx].m_normal);
                     }   // for k
-                    if (tmesh)
+                    if (occluder)
+                    {
+                        if (!material->isTransparent())
+                        {
+                            core::triangle3df tri(vertices[0].toIrrVector(), vertices[1].toIrrVector(),
+                                vertices[2].toIrrVector());
+#ifndef SERVER_ONLY
+                            OcclusionCulling::addOccluderTriangle(tri);
+#endif
+                        }
+                    }
+                    else if (tmesh)
                     {
                         tmesh->addTriangle(vertices[0], vertices[1],
                             vertices[2], normals[0],
@@ -1079,7 +1095,18 @@ void Track::convertTrackToBullet(scene::ISceneNode *node)
                             normals[k] = mbVertices[indx].Normal;
                         }   // for k
 
-                        if (tmesh)
+                        if (occluder)
+                        {
+                            if (!material->isTransparent())
+                            {
+                                core::triangle3df tri(vertices[0].toIrrVector(), vertices[1].toIrrVector(),
+                                    vertices[2].toIrrVector());
+#ifndef SERVER_ONLY
+                                OcclusionCulling::addOccluderTriangle(tri);
+#endif
+                            }
+                        }
+                        else if (tmesh)
                         {
                             tmesh->addTriangle(vertices[0], vertices[1],
                                 vertices[2], normals[0],
@@ -1105,7 +1132,18 @@ void Track::convertTrackToBullet(scene::ISceneNode *node)
                             normals[k] = mbVertices[indx].Normal;
                         }   // for k
 
-                        if (tmesh)
+                        if (occluder)
+                        {
+                            if (!material->isTransparent())
+                            {
+                                core::triangle3df tri(vertices[0].toIrrVector(), vertices[1].toIrrVector(),
+                                    vertices[2].toIrrVector());
+#ifndef SERVER_ONLY
+                                OcclusionCulling::addOccluderTriangle(tri);
+#endif
+                            }
+                        }
+                        else if (tmesh)
                         {
                             tmesh->addTriangle(vertices[0], vertices[1],
                                 vertices[2], normals[0],
@@ -1131,7 +1169,18 @@ void Track::convertTrackToBullet(scene::ISceneNode *node)
                             normals[k] = mbVertices[indx].Normal;
                         }   // for k
 
-                        if (tmesh)
+                        if (occluder)
+                        {
+                            if (!material->isTransparent())
+                            {
+                                core::triangle3df tri(vertices[0].toIrrVector(), vertices[1].toIrrVector(),
+                                    vertices[2].toIrrVector());
+#ifndef SERVER_ONLY
+                                OcclusionCulling::addOccluderTriangle(tri);
+#endif
+                            }
+                        }
+                        else if (tmesh)
                         {
                             tmesh->addTriangle(vertices[0], vertices[1],
                                 vertices[2], normals[0],
@@ -1270,6 +1319,7 @@ bool Track::loadMainTrack(const XMLNode &root)
     scene_node->setPosition(xyz);
     scene_node->setRotation(hpr);
     handleAnimatedTextures(scene_node, *track_node);
+    convertTrackToBullet(scene_node, true/*occluder*/);
     m_all_nodes.push_back(scene_node);
 
     MeshTools::minMax3D(tangent_mesh, &m_aabb_min, &m_aabb_max);
@@ -1495,6 +1545,9 @@ bool Track::loadMainTrack(const XMLNode &root)
     scene_node->setMaterialFlag(video::EMF_GOURAUD_SHADING, true);
     main_loop->renderGUI(4500);
 
+#ifndef SERVER_ONLY
+    OcclusionCulling::start();
+#endif
     return true;
 }   // loadMainTrack
 
@@ -1602,6 +1655,10 @@ void Track::handleAnimatedTextures(scene::ISceneNode *node, const XMLNode &xml)
  */
 void Track::updateGraphics(float dt)
 {
+#ifndef SERVER_ONLY
+    OcclusionCulling::pushFrame(Camera::getCamera(0)->getCameraSceneNode(),
+        irr_driver->getActualScreenSize());
+#endif
     m_track_object_manager->updateGraphics(dt);
 
     for (unsigned int i = 0; i<m_animated_textures.size(); i++)

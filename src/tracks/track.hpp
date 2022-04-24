@@ -724,7 +724,7 @@ public:
     // ------------------------------------------------------------------------
     bool isAddon() const                                 { return m_is_addon; }
     // ------------------------------------------------------------------------
-    void convertTrackToBullet(scene::ISceneNode *node);
+    void convertTrackToBullet(scene::ISceneNode *node, bool occluder = false);
     // ------------------------------------------------------------------------
     CheckManager* getCheckManager() const           { return m_check_manager; }
     // ------------------------------------------------------------------------
