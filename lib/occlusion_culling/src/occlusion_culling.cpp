@@ -31,7 +31,11 @@
 #include <ICameraSceneNode.h>
 #include <matrix4.h>
 
+#include <algorithm>
+#include <array>
 #include <condition_variable>
+#include <limits>
+#include <map>
 #include <mutex>
 #include <thread>
 #include <utility>
@@ -81,7 +85,74 @@ std::thread g_worker;
 std::condition_variable g_frame_data_cv;
 std::mutex g_frame_data_mutex;
 std::vector<FrameData> g_frame_data;
+std::mutex g_nodes_mutex;
+std::map<std::weak_ptr<std::atomic<bool> >, core::aabbox3df, std::owner_less<std::weak_ptr<std::atomic<bool> > > > g_nodes;
 // ============================================================================
+void handleNodes(const core::matrix4& pvm)
+{
+    std::map<std::weak_ptr<std::atomic<bool> >, core::aabbox3df, std::owner_less<std::weak_ptr<std::atomic<bool> > > > cur_nodes;
+    std::unique_lock<std::mutex> ul(g_nodes_mutex);
+    std::swap(g_nodes, cur_nodes);
+    ul.unlock();
+    for (auto& node : cur_nodes)
+    {
+        std::shared_ptr<std::atomic<bool> > visible = node.first.lock();
+        if (!visible)
+            continue;
+
+        const core::aabbox3df& bbox = node.second;
+        constexpr unsigned edge_size = 8;
+        std::array<core::vector3df, edge_size> edges;
+        bbox.getEdges(edges.data());
+
+        std::array<float, edge_size * 4> projected;
+        MaskedOcclusionCulling::TransformVertices(pvm.pointer(),
+            (float*)edges.data(), projected.data(), edges.size());
+        /* From irrlicht
+           /3--------/7
+          / |       / |
+         /  |      /  |
+        1---------5   |
+        |  /2- - -|- -6
+        | /       |  /
+        |/        | /
+        0---------4/
+        */
+        std::array<unsigned, 36> edge_indices =
+        {{
+            0, 1, 2,
+            2, 1, 3,
+            3, 7, 2,
+            2, 6, 7,
+            7, 5, 6,
+            6, 5, 4,
+            4, 5, 0,
+            0, 1, 5,
+            5, 1, 3,
+            3, 5, 7,
+            0, 2, 4,
+            4, 6, 2
+        }};
+        MaskedOcclusionCulling::CullingResult r = g_moc->TestTriangles(
+            projected.data(), edge_indices.data(), edge_indices.size() / 3,
+            /*modelToClipMatrix*/NULL, MaskedOcclusionCulling::BACKFACE_NONE);
+        if (r == MaskedOcclusionCulling::VISIBLE)
+        {
+            //printf("VISIBLE\n");
+            visible->store(true);
+        }
+        else
+        {
+            //if (r == MaskedOcclusionCulling::VIEW_CULLED)
+            //    printf("VIEW_CULLED\n");
+            //else if (r == MaskedOcclusionCulling::OCCLUDED)
+            //    printf("OCCLUDED\n");
+            visible->store(false);
+        }
+    }
+}   // handleNodes
+
+// ----------------------------------------------------------------------------
 void workerThread()
 {
     while (true)
@@ -118,6 +189,7 @@ void workerThread()
             idx.push_back(i);
         g_moc->RenderTriangles(projected.data(), idx.data(), g_tris.size(),
             /*modelToClipMatrix*/NULL, MaskedOcclusionCulling::BACKFACE_CCW);
+        handleNodes(pvm);
 
 #undef WRITE_DEPTH_BUFFER
 #ifdef WRITE_DEPTH_BUFFER
@@ -129,8 +201,6 @@ void workerThread()
         video::SColor* data = (video::SColor*)img->lock();
         for (unsigned i = 0; i < padded_size.getArea(); i++)
             data[i] = video::SColor(255, depth_buffer[i] * 255.f, 0, 0);
-        GE::getDriver()->writeImageToFile(img, "depthbuffer.jpg");
-        img->drop();
 #endif
     }
 }   // start
@@ -183,5 +253,16 @@ void stop()
     }
     g_tris.clear();
 }   // stop
+
+// ----------------------------------------------------------------------------
+void addSceneNode(irr::scene::ISceneNode* node)
+{
+    std::weak_ptr<std::atomic<bool> > ptr = node->getWeakVisible();
+    if (ptr.expired())
+        return;
+    std::lock_guard<std::mutex> lock(g_nodes_mutex);
+    if (g_nodes.find(ptr) == g_nodes.end())
+        g_nodes[ptr] = node->getTransformedBoundingBox();
+}   // addSceneNode
 
 }   // namespace OcclusionCulling

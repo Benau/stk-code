@@ -32,6 +32,7 @@ namespace irr
     namespace scene
     {
         class ICameraSceneNode;
+        class ISceneNode;
     }
 }
 
@@ -41,6 +42,7 @@ void start();
 void addOccluderTriangle(const irr::core::triangle3df& tri);
 void pushFrame(const irr::scene::ICameraSceneNode* cam,
               const irr::core::dimension2du& screen_size);
+void addSceneNode(irr::scene::ISceneNode* node);
 void stop();
 }
 

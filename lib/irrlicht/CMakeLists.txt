@@ -8,6 +8,7 @@ if(NOT SERVER_ONLY)
                         "${PNG_INCLUDE_DIRS}"
                         "${ZLIB_INCLUDE_DIR}"
                         "${CMAKE_CURRENT_SOURCE_DIR}/../../src"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/../occlusion_culling/include"
                         "${CMAKE_CURRENT_SOURCE_DIR}/../graphics_engine/include")
 else()
     include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include/"

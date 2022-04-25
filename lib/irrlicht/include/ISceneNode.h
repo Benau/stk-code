@@ -18,6 +18,9 @@
 #include "irrList.h"
 #include "IAttributes.h"
 
+#include <atomic>
+#include <memory>
+
 namespace irr
 {
 namespace scene
@@ -51,6 +54,7 @@ namespace scene
 				AutomaticCullingState(EAC_BOX), DebugDataVisible(EDS_OFF),
 				IsVisible(true), IsDebugObject(false)
 		{
+			m_visible_pointer = std::make_shared<std::atomic<bool > >(true);
 			if (parent)
 				parent->addChild(this);
 
@@ -766,6 +770,17 @@ namespace scene
 		/** \return The node's scene manager. */
 		virtual ISceneManager* getSceneManager(void) const { return SceneManager; }
 
+		std::weak_ptr<std::atomic<bool> > getWeakVisible() const { return m_visible_pointer; }
+
+		bool getOcclusionCullingResult() const
+		{
+			// After disableOcclusionCulling() this node will always be visible
+			if (!m_visible_pointer)
+				return true;
+			return m_visible_pointer->load();
+		}
+
+		void disableOcclusionCulling() { m_visible_pointer.reset(); }
 	protected:
 
 		//! A clone function for the ISceneNode members.
@@ -867,6 +882,9 @@ namespace scene
 
 		//! Is debug object?
 		bool IsDebugObject;
+
+		// Asynchronous occlusion culling query usage
+		std::shared_ptr<std::atomic<bool> > m_visible_pointer;
 	};
 
 

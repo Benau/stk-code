@@ -320,6 +320,7 @@ LOCAL_CFLAGS       := -I../lib/irrlicht/source/Irrlicht/ \
                       -Ideps-$(TARGET_ARCH_ABI)/zlib/    \
                       -I../lib/sdl2/include/             \
                       -I../lib/graphics_engine/include   \
+                      -I../lib/occlusion_culling/include \
                       -DMOBILE_STK                       \
                       -DANDROID_PACKAGE_CALLBACK_NAME=$(PACKAGE_CALLBACK_NAME)
 LOCAL_CPPFLAGS     := -std=gnu++0x

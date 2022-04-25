@@ -57,6 +57,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <occlusion_culling.hpp>
+
 namespace SP
 {
 
@@ -821,6 +823,12 @@ void addObject(SPMeshNode* node)
 
         for (int dc_type = 0; dc_type < (handle_shadow ? 5 : 1); dc_type++)
         {
+            if (dc_type == DCT_NORMAL)
+            {
+                OcclusionCulling::addSceneNode(node);
+                discard[0] = !node->getOcclusionCullingResult();
+                continue;
+            }
             for (int i = 0; i < 24; i += 4)
             {
                 bool outside = true;

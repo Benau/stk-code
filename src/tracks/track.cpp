@@ -1320,6 +1320,7 @@ bool Track::loadMainTrack(const XMLNode &root)
     scene_node->setRotation(hpr);
     handleAnimatedTextures(scene_node, *track_node);
     convertTrackToBullet(scene_node, true/*occluder*/);
+    scene_node->disableOcclusionCulling();
     m_all_nodes.push_back(scene_node);
 
     MeshTools::minMax3D(tangent_mesh, &m_aabb_min, &m_aabb_max);
