@@ -21,6 +21,10 @@ if(UNIX OR MINGW)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++0x")
 endif()
 
+set(GE_CORE_SOURCES
+    src/ge_xml_reader.cpp
+)
+
 set(GE_SOURCES
     src/gl.c
     src/ge_main.cpp
@@ -40,4 +44,4 @@ if(NOT APPLE OR DLOPEN_MOLTENVK)
     set(GE_SOURCES ${GE_SOURCES} src/vulkan.c)
 endif()
 
-add_library(graphics_engine STATIC ${GE_SOURCES})
+add_library(graphics_engine STATIC ${GE_CORE_SOURCES} ${GE_SOURCES})
