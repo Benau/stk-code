@@ -3,7 +3,8 @@
 
 #include "vulkan_wrapper.h"
 #include <string>
-#include <shaderc/shaderc.hpp>
+
+#include <glslang/Public/ShaderLang.h>
 
 namespace GE
 {
@@ -19,7 +20,7 @@ void loadAllShaders();
 // ----------------------------------------------------------------------------
 VkShaderModule getShader(const std::string& filename);
 // ----------------------------------------------------------------------------
-VkShaderModule loadShader(shaderc_shader_kind, const std::string&);
+VkShaderModule loadShader(EShLanguage, const std::string&);
 // ----------------------------------------------------------------------------
 unsigned getSamplerSize();
 };   // GEVulkanShaderManager
