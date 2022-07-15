@@ -283,6 +283,21 @@ build_deps()
         check_error
         touch "$DIRNAME/deps-$ARCH_OPTION/libvorbis.stamp"
     fi
+
+    # Glslang
+    if [ ! -f "$DIRNAME/deps-$ARCH_OPTION/glslang.stamp" ]; then
+        echo "Compiling $ARCH_OPTION glslang"
+        mkdir -p "$DIRNAME/deps-$ARCH_OPTION/glslang"
+        cp -a -f "$DIRNAME/../lib/graphics_engine/glslang/"* "$DIRNAME/deps-$ARCH_OPTION/glslang"
+
+        cd "$DIRNAME/deps-$ARCH_OPTION/glslang"
+        cmake . -DCMAKE_TOOLCHAIN_FILE=../../../cmake/Toolchain-android.cmake \
+                -DHOST=$HOST -DARCH=$ARCH -DCMAKE_C_FLAGS="-fpic -O3 -g"      \
+                -DCMAKE_CXX_FLAGS="-fpic -O3 -g" -DGLSLANG_MINI_SO=ON &&
+        make -j $(($(nproc) + 1))
+        check_error
+        touch "$DIRNAME/deps-$ARCH_OPTION/glslang.stamp"
+    fi
 }
 
 if [ -z "$COMPILE_ARCH" ] || [ "$COMPILE_ARCH" = "all" ]; then

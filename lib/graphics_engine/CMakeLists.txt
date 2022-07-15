@@ -1,3 +1,7 @@
+include_directories("${PROJECT_SOURCE_DIR}/lib/graphics_engine/glslang")
+include_directories("${PROJECT_SOURCE_DIR}/lib/graphics_engine")
+add_subdirectory("${PROJECT_SOURCE_DIR}/lib/graphics_engine/glslang")
+
 include_directories("${PROJECT_SOURCE_DIR}/lib/graphics_engine/include")
 include_directories("${PROJECT_SOURCE_DIR}/lib/graphics_utils")
 include_directories("${PROJECT_SOURCE_DIR}/lib/irrlicht/include")
@@ -47,3 +51,4 @@ if(NOT APPLE OR DLOPEN_MOLTENVK)
 endif()
 
 add_library(graphics_engine STATIC ${GE_SOURCES})
+target_link_libraries(graphics_engine glslang SPIRV OGLCompiler)

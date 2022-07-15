@@ -162,22 +162,29 @@ include $(BUILD_STATIC_LIBRARY)
 include $(CLEAR_VARS)
 
 
+# glslang
+LOCAL_MODULE       := glslang
+LOCAL_SRC_FILES    := deps-$(TARGET_ARCH_ABI)/glslang/libglslang_mini.so
+include $(PREBUILT_SHARED_LIBRARY)
+include $(CLEAR_VARS)
+
+
 # Graphics engine
 LOCAL_MODULE       := graphics_engine
 LOCAL_PATH         := .
 LOCAL_CPP_FEATURES += rtti exceptions
 LOCAL_SRC_FILES    := $(wildcard ../lib/graphics_engine/src/*.c) \
                       $(wildcard ../lib/graphics_engine/src/*.cpp)
-LOCAL_CFLAGS       := -I../lib/graphics_engine/include \
+LOCAL_CFLAGS       := -I../lib/graphics_engine/glslang \
+                      -I../lib/graphics_engine/        \
+                      -I../lib/graphics_engine/include \
                       -I../lib/graphics_utils          \
                       -I../lib/sdl2/include/           \
                       -I../lib/irrlicht/include/
 ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
 LOCAL_ARM_NEON     := false
 endif
-LOCAL_STATIC_LIBRARIES := shaderc
 include $(BUILD_STATIC_LIBRARY)
-$(call import-module, third_party/shaderc)
 include $(CLEAR_VARS)
 
 
@@ -343,7 +350,7 @@ LOCAL_STATIC_LIBRARIES := irrlicht bullet enet ifaddrs angelscript mcpp SDL2 \
                           vorbisfile vorbis ogg openal curl libmbedtls       \
                           libmbedcrypto libmbedx509 c++_static sheenbidi     \
                           harfbuzz freetype tinygettext graphics_utils       \
-                          graphics_engine
+                          glslang graphics_engine
 
 ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
 LOCAL_ARM_NEON     := false
