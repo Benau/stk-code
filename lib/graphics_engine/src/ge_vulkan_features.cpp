@@ -26,6 +26,9 @@ uint32_t g_max_sampler_supported = 0;
 bool g_supports_multi_draw_indirect = false;
 bool g_supports_base_vertex_rendering = true;
 bool g_supports_compute_in_main_queue = false;
+bool g_supports_bc3 = false;
+bool g_supports_bc7 = false;
+bool g_supports_astc = false;
 }   // GEVulkanFeatures
 
 // ============================================================================
@@ -65,6 +68,18 @@ void GEVulkanFeatures::init(GEVulkanDriver* vk)
     vkGetPhysicalDeviceFormatProperties(vk->getPhysicalDevice(),
         VK_FORMAT_R8_UNORM, &format_properties);
     g_supports_r8_blit = format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+    format_properties = {};
+    vkGetPhysicalDeviceFormatProperties(vk->getPhysicalDevice(),
+        VK_FORMAT_BC3_UNORM_BLOCK, &format_properties);
+    g_supports_bc3 = format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+    format_properties = {};
+    vkGetPhysicalDeviceFormatProperties(vk->getPhysicalDevice(),
+        VK_FORMAT_BC7_UNORM_BLOCK, &format_properties);
+    g_supports_bc7 = format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+    format_properties = {};
+    vkGetPhysicalDeviceFormatProperties(vk->getPhysicalDevice(),
+        VK_FORMAT_ASTC_4x4_UNORM_BLOCK, &format_properties);
+    g_supports_astc = format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
 
     uint32_t extension_count;
     vkEnumerateDeviceExtensionProperties(vk->getPhysicalDevice(), NULL,
@@ -183,6 +198,15 @@ void GEVulkanFeatures::printStats()
         "Vulkan supports compute in main queue",
         g_supports_compute_in_main_queue ? "true" : "false");
     os::Printer::log(
+        "Vulkan supports BC3 texture compression",
+        g_supports_bc3 ? "true" : "false");
+    os::Printer::log(
+        "Vulkan supports BC7 texture compression",
+        g_supports_bc7 ? "true" : "false");
+    os::Printer::log(
+        "Vulkan supports adaptive scalable texture compression (ASTC)",
+        g_supports_astc ? "true" : "false");
+    os::Printer::log(
         "Vulkan descriptor indexes can be dynamically non-uniform",
         g_supports_non_uniform_indexing ? "true" : "false");
     os::Printer::log(
@@ -260,5 +284,23 @@ bool GEVulkanFeatures::supportsComputeInMainQueue()
 {
     return g_supports_compute_in_main_queue;
 }   // supportsComputeInMainQueue
+
+// ----------------------------------------------------------------------------
+bool GEVulkanFeatures::supportsBC3TextureCompression()
+{
+    return g_supports_bc3;
+}   // supportsBC3TextureCompression
+
+// ----------------------------------------------------------------------------
+bool GEVulkanFeatures::supportsBC7TextureCompression()
+{
+    return g_supports_bc7;
+}   // supportsBC7TextureCompression
+
+// ----------------------------------------------------------------------------
+bool GEVulkanFeatures::supportsASTC()
+{
+    return g_supports_astc;
+}   // supportsASTC
 
 }
