@@ -303,4 +303,11 @@ bool GEVulkanFeatures::supportsASTC()
     return g_supports_astc;
 }   // supportsASTC
 
+// ----------------------------------------------------------------------------
+bool GEVulkanFeatures::supportsTextureCompression()
+{
+    return g_supports_compute_in_main_queue &&
+        (g_supports_bc3 || g_supports_bc7 || g_supports_astc);
+}   // supportsTextureCompression
+
 }

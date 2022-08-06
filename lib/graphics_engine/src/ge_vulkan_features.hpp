@@ -40,6 +40,8 @@ bool supportsBC3TextureCompression();
 bool supportsBC7TextureCompression();
 // ----------------------------------------------------------------------------
 bool supportsASTC();
+// ----------------------------------------------------------------------------
+bool supportsTextureCompression();
 };   // GEVulkanFeatures
 
 }

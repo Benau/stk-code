@@ -129,6 +129,15 @@ void GEVulkanShaderManager::init(GEVulkanDriver* vk)
     g_predefines = oss.str();
 
     loadAllShaders();
+
+    if (GEVulkanFeatures::supportsTextureCompression())
+    {
+        if (GEVulkanFeatures::supportsBC3TextureCompression())
+        {
+            g_shaders["bc3.comp"] = loadShader(shaderc_compute_shader,
+                "compressonator/bc3_encode_kernel.hlsl");
+        }
+    }
 }   // init
 
 // ----------------------------------------------------------------------------
@@ -193,13 +202,17 @@ VkShaderModule GEVulkanShaderManager::loadShader(shaderc_shader_kind kind,
             std::string("File ") + name + " failed to be read");
     }
     r->drop();
-    shader_data = g_predefines + shader_data;
+    bool hlsl = name.substr(name.find_last_of(".") + 1) == "hlsl";
+    if (!hlsl)
+        shader_data = g_predefines + shader_data;
 
     shaderc::Compiler compiler;
     FileIncluder* fi = new FileIncluder;
     shaderc::CompileOptions options;
     options.SetIncluder(std::unique_ptr<
         shaderc::CompileOptions::IncluderInterface>(fi));
+    if (hlsl)
+        options.SetSourceLanguage(shaderc_source_language_hlsl);
 
     shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
         shader_data, kind, shader_fullpath.c_str(), options);
