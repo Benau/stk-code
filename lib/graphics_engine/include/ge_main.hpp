@@ -34,6 +34,12 @@ inline size_t getPadding(size_t in, size_t alignment)
     else
         return alignment - mod;
 }
+inline int get4x4CompressedTextureSize(int width, int height)
+{
+    int blockcount = ((width + 3) / 4) * ((height + 3) / 4);
+    int blocksize = 4 * 4;
+    return blockcount * blocksize;
+}
 }
 
 #endif

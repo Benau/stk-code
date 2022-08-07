@@ -1,5 +1,6 @@
 #include "ge_vulkan_texture.hpp"
 
+#include "ge_vulkan_bc3.hpp"
 #include "ge_vulkan_command_loader.hpp"
 #include "ge_vulkan_features.hpp"
 #include "ge_vulkan_driver.hpp"
@@ -145,6 +146,9 @@ bool GEVulkanTexture::createTextureImage(uint8_t* texture_data,
     if (!success)
         return false;
 
+    VkImage old_image = VK_NULL_HANDLE;
+    VmaAllocation old_allocation = VK_NULL_HANDLE;
+    GEVulkanBC3* bc3 = NULL;
     VkResult ret = VK_SUCCESS;
     uint8_t* data;
     VkCommandBuffer command_buffer = VK_NULL_HANDLE;
@@ -192,9 +196,55 @@ bool GEVulkanTexture::createTextureImage(uint8_t* texture_data,
     transitionImageLayout(command_buffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+    if (generate_hq_mipmap && GEVulkanBC3::loaded())
+    {
+        bc3 = new GEVulkanBC3(m_image, m_internal_format, mipmap_sizes);
+        bc3->compress(command_buffer);
+
+        old_image = m_image;
+        old_allocation = m_vma_allocation;
+        m_internal_format = VK_FORMAT_BC3_UNORM_BLOCK;
+        if (!createImage(VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT))
+            goto destroy;
+
+        transitionImageLayout(command_buffer, VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        unsigned level = 0;
+        for (auto& mip : mipmap_sizes)
+        {
+            unsigned cur_level = level;
+            VkBuffer cur_buffer = bc3->getBuffer(cur_level);
+
+            VkBufferMemoryBarrier barrier = {};
+            barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.buffer = cur_buffer;
+            barrier.size = VK_WHOLE_SIZE;
+
+            vkCmdPipelineBarrier(command_buffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 1, &barrier, 0,
+                NULL);
+
+            copyBufferToImage(command_buffer, bc3->getBuffer(cur_level),
+                mip.first.Width, mip.first.Height, 0, 0, 0, cur_level);
+            level++;
+        }
+
+        transitionImageLayout(command_buffer,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
     GEVulkanCommandLoader::endSingleTimeCommands(command_buffer);
 
 destroy:
+    delete bc3;
+    vmaDestroyImage(m_vk->getVmaAllocator(), old_image, old_allocation);
     vmaDestroyBuffer(m_vk->getVmaAllocator(), staging_buffer,
         staging_buffer_allocation);
     return ret == VK_SUCCESS;
@@ -274,7 +324,8 @@ void GEVulkanTexture::transitionImageLayout(VkCommandBuffer command_buffer,
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
         source_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     }
     else if (old_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL &&
         new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)

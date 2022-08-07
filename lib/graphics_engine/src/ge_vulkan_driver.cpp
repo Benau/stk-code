@@ -3,6 +3,7 @@
 #include "ge_main.hpp"
 
 #include "ge_vulkan_2d_renderer.hpp"
+#include "ge_vulkan_bc3.hpp"
 #include "ge_vulkan_camera_scene_node.hpp"
 #include "ge_vulkan_command_loader.hpp"
 #include "ge_vulkan_depth_texture.hpp"
@@ -640,6 +641,16 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
         throw std::runtime_error(std::string(
             "GEVulkanDriver constructor failed: ") + e.what());
     }
+
+    try
+    {
+        GEVulkanBC3::init(this);
+    }
+    catch (std::exception& e)
+    {
+        os::Printer::log("GEVulkanBC3", e.what());
+        GEVulkanBC3::destroy();
+    }
 }   // GEVulkanDriver
 
 // ----------------------------------------------------------------------------
@@ -666,6 +677,7 @@ void GEVulkanDriver::destroyVulkan()
         m_transparent_texture->drop();
         m_transparent_texture = NULL;
     }
+    GEVulkanBC3::destroy();
 
     if (m_irrlicht_device->getSceneManager() &&
         m_irrlicht_device->getSceneManager()->getActiveCamera())

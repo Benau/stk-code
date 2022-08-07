@@ -66,7 +66,7 @@ void GEVulkanCommandLoader::init(GEVulkanDriver* vk)
         }
     }
 
-    g_loader_count.store(thread_count - 1);
+    g_loader_count.store(thread_count);
     for (unsigned i = 0; i < thread_count - 1; i++)
     {
         g_loaders.emplace_back(
@@ -140,6 +140,12 @@ int GEVulkanCommandLoader::getLoaderId()
 {
     return g_loader_id;
 }   // getLoaderId
+
+// ----------------------------------------------------------------------------
+unsigned GEVulkanCommandLoader::getLoaderCount()
+{
+    return g_loader_count.load();
+}   // getLoaderCount
 
 // ----------------------------------------------------------------------------
 VkCommandPool GEVulkanCommandLoader::getCurrentCommandPool()

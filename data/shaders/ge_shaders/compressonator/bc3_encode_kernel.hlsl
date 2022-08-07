@@ -28,15 +28,16 @@
 #define ASPM_HLSL
 #endif
 
-cbuffer cbCS : register( b0 )
+//cbuffer cbCS : register( b0 )
+[[vk::push_constant]] cbuffer cbCS
 {
-    uint  g_tex_width;
+    //uint  g_tex_width;
     uint  g_num_block_x;
-    uint  g_format;
-    uint  g_mode_id;
+    //uint  g_format;
+    //uint  g_mode_id;
     uint  g_start_block_id;
-    uint  g_num_total_blocks;
-    float g_alpha_weight;
+    //uint  g_num_total_blocks;
+    //float g_alpha_weight;
     float g_quality;
 };
 
@@ -44,11 +45,13 @@ cbuffer cbCS : register( b0 )
 
 
 // Source Data
-Texture2D g_Input : register( t0 ); 
-StructuredBuffer<uint4> g_InBuff : register( t1 );
+[[vk::binding(0)]] Texture2D g_Input;
+//Texture2D g_Input : register( t0 );
+//StructuredBuffer<uint4> g_InBuff : register( t1 );
 
 // Compressed Output Data
-RWStructuredBuffer<uint4> g_OutBuff : register( u0 );
+//RWStructuredBuffer<uint4> g_OutBuff : register( u0 );
+[[vk::binding(1)]] RWStructuredBuffer<uint4> g_OutBuff;
 
 // Processing multiple blocks at a time
 #define MAX_USED_THREAD     16  // pixels in a BC (block compressed) block
@@ -60,7 +63,8 @@ RWStructuredBuffer<uint4> g_OutBuff : register( u0 );
 groupshared float4 shared_temp[THREAD_GROUP_SIZE];
 
 [numthreads( THREAD_GROUP_SIZE, 1, 1 )]
-void EncodeBlocks(uint GI : SV_GroupIndex, uint3 groupID : SV_GroupID)
+//void EncodeBlocks(uint GI : SV_GroupIndex, uint3 groupID : SV_GroupID)
+void main(uint GI : SV_GroupIndex, uint3 groupID : SV_GroupID)
 {
     // we process 4 BC blocks per thread group
     uint blockInGroup   = GI / MAX_USED_THREAD;                                         // what BC block this thread is on within this thread group
