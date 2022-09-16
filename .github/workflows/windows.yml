@@ -85,8 +85,8 @@ jobs:
           sudo wget https://github.com/supertuxkart/dependencies/releases/download/preview/mxe_static_mingw.zip
           sudo unzip mxe_static_mingw.zip
           sudo rm mxe_static_mingw.zip
-      - name: Install MinGW for aarch64
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.arch == 'aarch64' }}
+      - name: Install MinGW for armv7 or aarch64
+        if: ${{ matrix.os == 'ubuntu-latest' && ( matrix.arch == 'armv7' || matrix.arch == 'aarch64' ) }}
         run: |
           cd /
           sudo wget https://github.com/mstorsjo/llvm-mingw/releases/download/20210423/llvm-mingw-20210423-msvcrt-ubuntu-18.04-x86_64.tar.xz
