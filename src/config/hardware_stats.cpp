@@ -207,7 +207,7 @@ void determineOSVersion()
     m_os_version = std::string(u.sysname) + " " + l[0];
 #endif
 
-#ifdef WIN32
+#if defined(WIN32) && !(defined(_M_ARM) && defined(_MSC_VER))
     //  (C) 2014-2015 Wildfire Games (0 A.D.), ported by Joerg Henrichs.
 
     HKEY hKey;
