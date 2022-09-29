@@ -984,6 +984,11 @@ void GEVulkanDriver::createDevice()
     device_features.drawIndirectFirstInstance =
         GEVulkanFeatures::supportsMultiDrawIndirect();
 
+    VkPhysicalDeviceVulkan11Features vulkan11_features = {};
+    vulkan11_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+    vulkan11_features.shaderDrawParameters =
+        GEVulkanFeatures::supportsShaderDrawParameters();
+
     VkPhysicalDeviceVulkan12Features vulkan12_features = {};
     vulkan12_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
     vulkan12_features.descriptorIndexing =
@@ -992,6 +997,7 @@ void GEVulkanDriver::createDevice()
         GEVulkanFeatures::supportsNonUniformIndexing();
     vulkan12_features.descriptorBindingPartiallyBound =
         GEVulkanFeatures::supportsPartiallyBound();
+    vulkan11_features.pNext = &vulkan12_features;
 
     if (m_features.samplerAnisotropy == VK_TRUE)
         device_features.samplerAnisotropy = VK_TRUE;
@@ -1004,7 +1010,7 @@ void GEVulkanDriver::createDevice()
     create_info.enabledExtensionCount = m_device_extensions.size();
     create_info.ppEnabledExtensionNames = &m_device_extensions[0];
     create_info.enabledLayerCount = 0;
-    create_info.pNext = &vulkan12_features;
+    create_info.pNext = &vulkan11_features;
 
     VkResult result = vkCreateDevice(m_physical_device, &create_info, NULL, &m_vk->device);
 
