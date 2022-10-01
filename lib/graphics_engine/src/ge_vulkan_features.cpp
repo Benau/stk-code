@@ -28,6 +28,7 @@ uint32_t g_max_sampler_supported = 0;
 bool g_supports_multi_draw_indirect = false;
 bool g_supports_base_vertex_rendering = true;
 bool g_supports_compute_in_main_queue = false;
+bool g_supports_separated_compute_queue = false;
 bool g_supports_shader_draw_parameters = false;
 bool g_supports_s3tc_bc3 = false;
 bool g_supports_bptc_bc7 = false;
@@ -119,6 +120,7 @@ void GEVulkanFeatures::init(GEVulkanDriver* vk)
                 != 0;
         }
     }
+    g_supports_separated_compute_queue = vk->getComputeFamily() != -1;
 
     VkPhysicalDeviceFeatures2 supported_features = {};
     supported_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
@@ -214,6 +216,9 @@ void GEVulkanFeatures::printStats()
         "Vulkan supports compute in main queue",
         g_supports_compute_in_main_queue ? "true" : "false");
     os::Printer::log(
+        "Vulkan supports separated compute queue",
+        g_supports_separated_compute_queue ? "true" : "false");
+    os::Printer::log(
         "Vulkan supports shader draw parameters",
         g_supports_shader_draw_parameters ? "true" : "false");
     os::Printer::log(
@@ -304,6 +309,12 @@ bool GEVulkanFeatures::supportsComputeInMainQueue()
 {
     return g_supports_compute_in_main_queue;
 }   // supportsComputeInMainQueue
+
+// ----------------------------------------------------------------------------
+bool GEVulkanFeatures::supportsSeparatedComputeQueue()
+{
+    return g_supports_separated_compute_queue;
+}   // supportsSeparatedComputeQueue
 
 // ----------------------------------------------------------------------------
 bool GEVulkanFeatures::supportsShaderDrawParameters()

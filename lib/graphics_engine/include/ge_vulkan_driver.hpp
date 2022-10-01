@@ -344,6 +344,12 @@ namespace GE
         unsigned getGraphicsQueueCount() const
                                               { return m_graphics_queue_count; }
         std::unique_lock<std::mutex> getGraphicsQueue(VkQueue* queue) const;
+        uint32_t getComputeFamily() const           { return m_compute_family; }
+        std::unique_lock<std::mutex> getComputeQueue(VkQueue* queue) const
+        {
+            *queue = m_compute_queue;
+            return std::unique_lock<std::mutex>(m_compute_queue_mutex);
+        }
         void waitIdle(bool flush_command_loader = false);
         void setDisableWaitIdle(bool val)         { m_disable_wait_idle = val; }
         IrrlichtDevice* getIrrlichtDevice() const  { return m_irrlicht_device; }
@@ -479,8 +485,12 @@ namespace GE
         std::vector<VkQueue> m_graphics_queue;
         VkQueue m_present_queue;
         mutable std::vector<std::mutex*> m_graphics_queue_mutexes;
+        mutable std::mutex m_compute_queue_mutex;
+        VkQueue m_compute_queue;
 
         uint32_t m_graphics_family;
+        uint32_t m_compute_family;
+
         uint32_t m_present_family;
         unsigned m_graphics_queue_count;
         VkPhysicalDeviceProperties m_properties;
@@ -513,7 +523,9 @@ namespace GE
         void createInstance(SDL_Window* window);
         void findPhysicalDevice();
         bool checkDeviceExtensions(VkPhysicalDevice device);
-        bool findQueueFamilies(VkPhysicalDevice device, uint32_t* graphics_family, unsigned* graphics_queue_count, uint32_t* present_family);
+        bool findQueueFamilies(VkPhysicalDevice device, uint32_t* graphics_family,
+                               unsigned* graphics_queue_count,
+                               uint32_t* present_family, uint32_t* compute_family);
         bool updateSurfaceInformation(VkPhysicalDevice device,
                                       VkSurfaceCapabilitiesKHR* surface_capabilities,
                                       std::vector<VkSurfaceFormatKHR>* surface_formats,
