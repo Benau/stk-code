@@ -509,7 +509,9 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
     m_vk.reset(new VK());
     m_physical_device = VK_NULL_HANDLE;
     m_present_queue = VK_NULL_HANDLE;
+    m_compute_queue = VK_NULL_HANDLE;
     m_graphics_family = m_present_family = 0;
+    m_compute_family = -1;
     m_graphics_queue_count = 0;
     m_properties = {};
     m_features = {};
@@ -821,10 +823,11 @@ void GEVulkanDriver::findPhysicalDevice()
     {
         uint32_t graphics_family = 0;
         uint32_t present_family = 0;
+        uint32_t compute_family = -1;
         unsigned graphics_queue_count = 0;
 
         bool success = findQueueFamilies(device, &graphics_family,
-            &graphics_queue_count, &present_family);
+            &graphics_queue_count, &present_family, &compute_family);
 
         if (!success)
             continue;
@@ -848,6 +851,7 @@ void GEVulkanDriver::findPhysicalDevice()
         m_graphics_family = graphics_family;
         m_graphics_queue_count = graphics_queue_count;
         m_present_family = present_family;
+        m_compute_family = compute_family;
         m_surface_capabilities = surface_capabilities;
         m_surface_formats = surface_formats;
         m_present_modes = present_modes;
@@ -913,7 +917,8 @@ bool GEVulkanDriver::updateSurfaceInformation(VkPhysicalDevice device,
 bool GEVulkanDriver::findQueueFamilies(VkPhysicalDevice device,
                                        uint32_t* graphics_family,
                                        unsigned* graphics_queue_count,
-                                       uint32_t* present_family)
+                                       uint32_t* present_family,
+                                       uint32_t* compute_family)
 {
     uint32_t queue_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, NULL);
@@ -930,7 +935,8 @@ bool GEVulkanDriver::findQueueFamilies(VkPhysicalDevice device,
     for (unsigned int i = 0; i < queue_families.size(); i++)
     {
         if (queue_families[i].queueCount > 0 &&
-            queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT &&
+            queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT)
         {
             *graphics_family = i;
             *graphics_queue_count = queue_families[i].queueCount;
@@ -952,7 +958,21 @@ bool GEVulkanDriver::findQueueFamilies(VkPhysicalDevice device,
         }
     }
 
-    return found_graphics_family && found_present_family;
+    if (!found_graphics_family || !found_present_family)
+        return false;
+
+    for (unsigned int i = 0; i < queue_families.size(); i++)
+    {
+        if (i != *graphics_family && queue_families[i].queueCount > 0 &&
+            queue_families[i].queueFlags & VK_QUEUE_COMPUTE_BIT &&
+            queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT)
+        {
+            *compute_family = i;
+            break;
+        }
+    }
+
+    return true;
 }   // findQueueFamilies
 
 // ----------------------------------------------------------------------------
@@ -972,6 +992,13 @@ void GEVulkanDriver::createDevice()
     if (m_present_family != m_graphics_family)
     {
         queue_create_info.queueFamilyIndex = m_present_family;
+        queue_create_info.queueCount = 1;
+        queue_create_infos.push_back(queue_create_info);
+    }
+
+    if (m_compute_family != -1)
+    {
+        queue_create_info.queueFamilyIndex = m_compute_family;
         queue_create_info.queueCount = 1;
         queue_create_infos.push_back(queue_create_info);
     }
@@ -1027,6 +1054,8 @@ void GEVulkanDriver::createDevice()
 
     if (m_present_family != m_graphics_family)
         vkGetDeviceQueue(m_vk->device, m_present_family, 0, &m_present_queue);
+    if (m_compute_family != -1)
+        vkGetDeviceQueue(m_vk->device, m_compute_family, 0, &m_compute_queue);
 }   // createDevice
 
 // ----------------------------------------------------------------------------
@@ -2291,7 +2320,9 @@ void GEVulkanDriver::waitIdle(bool flush_command_loader)
     // Host access to all VkQueue objects created from device must be externally synchronized
     for (std::mutex* m : m_graphics_queue_mutexes)
         m->lock();
+    m_compute_queue_mutex.lock();
     vkDeviceWaitIdle(m_vk->device);
+    m_compute_queue_mutex.unlock();
     for (std::mutex* m : m_graphics_queue_mutexes)
         m->unlock();
 
