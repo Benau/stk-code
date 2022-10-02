@@ -343,7 +343,8 @@ namespace GE
         uint32_t getGraphicsFamily() const         { return m_graphics_family; }
         unsigned getGraphicsQueueCount() const
                                               { return m_graphics_queue_count; }
-        std::unique_lock<std::mutex> getGraphicsQueue(VkQueue* queue) const;
+        std::unique_lock<std::mutex> getGraphicsQueue(VkQueue* queue,
+                                                      unsigned idx = -1) const;
         uint32_t getComputeFamily() const           { return m_compute_family; }
         std::unique_lock<std::mutex> getComputeQueue(VkQueue* queue) const
         {

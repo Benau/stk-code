@@ -1059,7 +1059,8 @@ void GEVulkanDriver::createDevice()
 }   // createDevice
 
 // ----------------------------------------------------------------------------
-std::unique_lock<std::mutex> GEVulkanDriver::getGraphicsQueue(VkQueue* queue) const
+std::unique_lock<std::mutex> GEVulkanDriver::getGraphicsQueue(VkQueue* queue,
+                                                            unsigned idx) const
 {
     if (m_graphics_queue_count == 0)
         throw std::runtime_error("No graphics queue created");
@@ -1067,6 +1068,11 @@ std::unique_lock<std::mutex> GEVulkanDriver::getGraphicsQueue(VkQueue* queue) co
     {
         *queue = m_graphics_queue[0];
         return std::unique_lock<std::mutex>(*m_graphics_queue_mutexes[0]);
+    }
+    if (idx != -1 && idx < m_graphics_queue_count)
+    {
+        *queue = m_graphics_queue[idx];
+        return std::unique_lock<std::mutex>(*m_graphics_queue_mutexes[idx]);
     }
     while (true)
     {
