@@ -22,7 +22,7 @@ namespace irr
     namespace scene
     {
         class ISceneNode; class IBillboardSceneNode; struct SParticle;
-        class IMesh;
+        class IMesh; class IParticleSystemSceneNode;
     }
 }
 
@@ -95,8 +95,6 @@ private:
 
     const int BILLBOARD_NODE = -1;
 
-    const int PARTICLE_NODE = -2;
-
     std::map<TexturesList, GESPMBuffer*> m_billboard_buffers;
 
     irr::core::quaternion m_billboard_rotation;
@@ -104,6 +102,10 @@ private:
     std::unordered_map<GESPMBuffer*, std::unordered_map<std::string,
         std::vector<std::pair<irr::scene::ISceneNode*, int> > > >
         m_visible_nodes;
+
+    std::unordered_map<GESPMBuffer*, std::unordered_map<std::string,
+         std::vector<irr::scene::IParticleSystemSceneNode*> > >
+         m_visible_particles;
 
     std::unordered_map<GESPMBuffer*, irr::scene::IMesh*> m_mb_map;
 
@@ -213,6 +215,7 @@ public:
     void reset()
     {
         m_visible_nodes.clear();
+        m_visible_particles.clear();
         m_mb_map.clear();
         m_cmds.clear();
         m_visible_objects.clear();
