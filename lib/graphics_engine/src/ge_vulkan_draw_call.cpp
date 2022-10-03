@@ -218,9 +218,15 @@ void GEVulkanDrawCall::addBillboardNode(irr::scene::ISceneNode* node,
         m_billboard_buffers[textures] = new GEVulkanBillboardBuffer(m);
     GESPMBuffer* buffer = m_billboard_buffers.at(textures);
     const std::string& shader = getShader(node, 0);
-    m_visible_nodes[buffer][shader].emplace_back(node,
-        node_type == irr::scene::ESNT_BILLBOARD ? BILLBOARD_NODE :
-        PARTICLE_NODE);
+    if (node_type == irr::scene::ESNT_BILLBOARD)
+    {
+        m_visible_nodes[buffer][shader].emplace_back(node, BILLBOARD_NODE);
+    }
+    else
+    {
+        m_visible_particles[buffer][shader].push_back(
+            static_cast<irr::scene::IParticleSystemSceneNode*>(node));
+    }
 }   // addBillboardNode
 
 // ----------------------------------------------------------------------------
@@ -329,7 +335,7 @@ void GEVulkanDrawCall::generate()
             bool skip_instance_key = false;
             for (auto& r : q.second)
             {
-                if (r.second == BILLBOARD_NODE || r.second == PARTICLE_NODE)
+                if (r.second == BILLBOARD_NODE)
                 {
                     skip_instance_key = true;
                     break;
@@ -366,7 +372,7 @@ void GEVulkanDrawCall::generate()
             for (auto& r : q.second)
             {
                 irr::scene::ISceneNode* node = r.first;
-                if (r.second == BILLBOARD_NODE || r.second == PARTICLE_NODE)
+                if (r.second == BILLBOARD_NODE)
                 {
                     if (GEVulkanFeatures::supportsDifferentTexturePerDraw())
                     {
@@ -375,32 +381,9 @@ void GEVulkanDrawCall::generate()
                         const irr::video::ITexture** list = &textures[0];
                         material_id = m_texture_descriptor->getTextureID(list);
                     }
-                    if (r.second == BILLBOARD_NODE)
-                    {
-                        m_visible_objects.emplace_back(
-                            static_cast<irr::scene::IBillboardSceneNode*>(
-                            node), material_id, m_billboard_rotation);
-                    }
-                    else
-                    {
-                        irr::scene::IParticleSystemSceneNode* pn =
-                            static_cast<irr::scene::IParticleSystemSceneNode*>(
-                            node);
-                        const core::array<SParticle>& particles =
-                            pn->getParticles();
-                        unsigned ps = particles.size();
-                        if (ps == 0)
-                        {
-                            visible_count--;
-                            continue;
-                        }
-                        visible_count += ps - 1;
-                        for (unsigned i = 0; i < ps; i++)
-                        {
-                            m_visible_objects.emplace_back(particles[i],
-                                material_id, m_billboard_rotation);
-                        }
-                    }
+                    m_visible_objects.emplace_back(
+                        static_cast<irr::scene::IBillboardSceneNode*>(
+                        node), material_id, m_billboard_rotation);
                 }
                 else if (skip_instance_key || it == cur_key.end())
                 {
@@ -435,6 +418,62 @@ void GEVulkanDrawCall::generate()
                  cur_key.push_back(key);
         }
     }
+
+    for (auto& p : m_visible_particles)
+    {
+        TexturesList textures = getTexturesList(p.first->getMaterial());
+        const irr::video::ITexture** list = &textures[0];
+        int material_id = m_texture_descriptor->getTextureID(list);
+        m_materials[p.first] = material_id;
+
+        for (auto& q : p.second)
+        {
+            unsigned visible_count = q.second.size();
+            if (visible_count == 0)
+                continue;
+            std::string cur_shader = q.first;
+            if (m_graphics_pipelines.find(cur_shader) ==
+                m_graphics_pipelines.end())
+                continue;
+            for (irr::scene::IParticleSystemSceneNode* node : q.second)
+            {
+                if (GEVulkanFeatures::supportsDifferentTexturePerDraw())
+                {
+                    const irr::video::SMaterial& m = node->getMaterial(0);
+                    TexturesList textures = getTexturesList(m);
+                    const irr::video::ITexture** list = &textures[0];
+                    material_id = m_texture_descriptor->getTextureID(list);
+                }
+                const core::array<SParticle>& particles = node->getParticles();
+                unsigned ps = particles.size();
+                if (ps == 0)
+                {
+                    visible_count--;
+                    continue;
+                }
+                visible_count += ps - 1;
+                for (unsigned i = 0; i < ps; i++)
+                {
+                    m_visible_objects.emplace_back(particles[i],
+                        material_id, m_billboard_rotation);
+                }
+            }
+            VkDrawIndexedIndirectCommand cmd;
+            cmd.indexCount = p.first->getIndexCount();
+            cmd.instanceCount = visible_count;
+            cmd.firstIndex = use_base_vertex ? p.first->getIBOOffset() : 0;
+            cmd.vertexOffset = use_base_vertex ? p.first->getVBOOffset() : 0;
+            cmd.firstInstance = accumulated_instance;
+            accumulated_instance += visible_count;
+            const PipelineSettings& settings =
+                m_graphics_pipelines[cur_shader].second;
+            std::string sorting_key =
+                std::string(1, settings.m_drawing_priority) + cur_shader;
+            m_cmds.push_back({ cmd, cur_shader, sorting_key, p.first,
+                settings.isTransparent() });
+        }
+    }
+
     if (!bind_mesh_textures)
     {
         std::stable_sort(m_cmds.begin(), m_cmds.end(),
