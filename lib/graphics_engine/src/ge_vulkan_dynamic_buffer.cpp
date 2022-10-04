@@ -174,7 +174,7 @@ void GEVulkanDynamicBuffer::setCurrentData(const std::vector<
 }   // setCurrentData
 
 // ----------------------------------------------------------------------------
-void GEVulkanDynamicBuffer::resizeIfNeeded(size_t new_size)
+bool GEVulkanDynamicBuffer::resizeIfNeeded(size_t new_size)
 {
     if (new_size > m_size)
     {
@@ -184,7 +184,9 @@ void GEVulkanDynamicBuffer::resizeIfNeeded(size_t new_size)
             initHostBuffer(i, m_local_buffer.size() == 0);
         for (unsigned i = 0; i < m_local_buffer.size(); i++)
             initLocalBuffer(i);
+        return true;
     }
+    return false;
 }   // resizeIfNeeded
 
 // ----------------------------------------------------------------------------
