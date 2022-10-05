@@ -47,6 +47,9 @@ extern "C" VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     std::string msg = callback_data->pMessage;
     if (msg.find("UNASSIGNED-CoreValidation-Shader-OutputNotConsumed") != std::string::npos)
         return VK_FALSE;
+    // We use host memory (std::vector) so it's not applicable
+    if (msg.find("UNASSIGNED-BestPractices-vkAllocateMemory-small-allocation") != std::string::npos)
+        return VK_FALSE;
 #ifdef __ANDROID__
     android_LogPriority alp;
     switch (message_severity)
@@ -504,7 +507,8 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
                 m_depth_texture(NULL), m_mesh_texture_descriptor(NULL),
                 m_rtt_texture(NULL), m_prev_rtt_texture(NULL),
                 m_separate_rtt_texture(NULL), m_rtt_polycount(0),
-                m_billboard_quad(NULL)
+                m_billboard_quad(NULL), m_host_buffer_memory(NULL),
+                m_host_memory_alignment(-1)
 {
     m_vk.reset(new VK());
     m_physical_device = VK_NULL_HANDLE;
@@ -624,6 +628,44 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
     os::Printer::log("Vulkan vendor", getVendorInfo().c_str());
     os::Printer::log("Vulkan renderer", m_properties.deviceName);
     os::Printer::log("Vulkan driver version", getDriverVersionString().c_str());
+
+#ifndef __APPLE__
+    if (m_host_buffer_memory)
+    {
+        PFN_vkGetPhysicalDeviceProperties2 func = vkGetPhysicalDeviceProperties2;
+        if (!func)
+            func = (PFN_vkGetPhysicalDeviceProperties2)vkGetPhysicalDeviceProperties2KHR;
+        if (func && vkGetMemoryHostPointerPropertiesEXT)
+        {
+            VkPhysicalDeviceProperties2 props = {};
+            props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+            VkPhysicalDeviceExternalMemoryHostPropertiesEXT mem_props = {};
+            mem_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT;
+            props.pNext = &mem_props;
+            func(m_physical_device, &props);
+            m_host_memory_alignment = mem_props.minImportedHostPointerAlignment;
+            os::Printer::log("Vulkan host pointer alignment",
+                core::stringc(m_host_memory_alignment));
+        }
+        else
+        {
+            delete m_host_buffer_memory;
+            m_host_buffer_memory = NULL;
+            m_device_extensions.erase(std::remove_if(
+                m_device_extensions.begin(), m_device_extensions.end(),
+                [](const std::string& ext)
+                {
+                    return ext == VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME;
+                }));
+            m_device_extensions.erase(std::remove_if(
+                m_device_extensions.begin(), m_device_extensions.end(),
+                [](const std::string& ext)
+                {
+                    return ext == VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME;
+                }));
+        }
+    }
+#endif
     for (const char* ext : m_device_extensions)
         os::Printer::log("Vulkan enabled extension", ext);
 
@@ -658,6 +700,7 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
 GEVulkanDriver::~GEVulkanDriver()
 {
     g_device_created.store(false);
+    delete m_host_buffer_memory;
 }   // ~GEVulkanDriver
 
 // ----------------------------------------------------------------------------
@@ -868,6 +911,41 @@ bool GEVulkanDriver::checkDeviceExtensions(VkPhysicalDevice device)
     std::vector<VkExtensionProperties> extensions(extension_count);
     vkEnumerateDeviceExtensionProperties(device, NULL, &extension_count,
         &extensions[0]);
+
+#ifndef __APPLE__
+    for (auto& ext : extensions)
+    {
+        if (strcmp(ext.extensionName,
+            VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME) == 0)
+        {
+            m_device_extensions.push_back(
+                VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
+            if (m_host_buffer_memory)
+                delete m_host_buffer_memory;
+            m_host_buffer_memory =
+                new std::unordered_map<VkBuffer, HostMemoryAllocation>();
+        }
+        else if (strcmp(ext.extensionName,
+            VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) == 0)
+        {
+            m_device_extensions.push_back(
+                VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+        }
+    }
+
+    if (m_host_buffer_memory)
+    {
+        for (auto& ext : extensions)
+        {
+            if (strcmp(ext.extensionName,
+                VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) == 0)
+            {
+                m_device_extensions.push_back(
+                    VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+            }
+        }
+    }
+#endif
 
     std::set<std::string> required_extensions(m_device_extensions.begin(),
         m_device_extensions.end());
@@ -1596,6 +1674,134 @@ bool GEVulkanDriver::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
         &buffer_info, &alloc_create_info, &buffer, &buffer_allocation, NULL) ==
         VK_SUCCESS;
 }   // createBuffer
+
+// ----------------------------------------------------------------------------
+bool GEVulkanDriver::createHostBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+                                      VmaAllocationCreateInfo& alloc_create_info,
+                                      VkBuffer& buffer,
+                                      VmaAllocation& buffer_allocation)
+{
+    if (!m_host_buffer_memory)
+    {
+        return createBuffer(size, usage, alloc_create_info, buffer,
+            buffer_allocation);
+    }
+
+#ifdef __APPLE__
+    return false;
+#else
+    VkBufferCreateInfo buffer_info = {};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = size;
+    buffer_info.usage = usage;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkExternalMemoryBufferCreateInfoKHR ext_info = {};
+    ext_info.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO_KHR;
+    ext_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
+    buffer_info.pNext = &ext_info;
+
+    VkResult result = vkCreateBuffer(m_vk->device, &buffer_info, NULL, &buffer);
+    if (result != VK_SUCCESS)
+        return false;
+
+    std::vector<uint8_t> data(size + (m_host_memory_alignment * 2));
+    uint8_t* data_ptr = data.data();
+    data_ptr += getPadding((size_t)data_ptr, m_host_memory_alignment);
+
+    VkMemoryHostPointerPropertiesEXT host_pointer_props = {};
+    host_pointer_props.sType = VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT;
+    result = vkGetMemoryHostPointerPropertiesEXT(m_vk->device,
+        VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT, data_ptr,
+        &host_pointer_props);
+
+    if (result != VK_SUCCESS)
+    {
+        vkDestroyBuffer(m_vk->device, buffer, NULL);
+        return false;
+    }
+
+    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    VkMemoryRequirements mem_requirements = {};
+    vkGetBufferMemoryRequirements(m_vk->device, buffer, &mem_requirements);
+
+    // AMD driver bug. Buffers created with external memory extension returns
+    // type bits of 0
+    if (!mem_requirements.memoryTypeBits)
+        mem_requirements.memoryTypeBits = ~0u;
+    mem_requirements.memoryTypeBits &= host_pointer_props.memoryTypeBits;
+
+    VkPhysicalDeviceMemoryProperties mem_properties = {};
+    vkGetPhysicalDeviceMemoryProperties(m_physical_device, &mem_properties);
+
+    uint32_t memory_type_index = std::numeric_limits<uint32_t>::max();
+    uint32_t type_filter = mem_requirements.memoryTypeBits;
+
+    for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++)
+    {
+        if ((type_filter & (1 << i)) &&
+            (mem_properties.memoryTypes[i].propertyFlags & properties) == properties)
+        {
+            memory_type_index = i;
+            break;
+        }
+    }
+
+    if (memory_type_index == std::numeric_limits<uint32_t>::max())
+    {
+        vkDestroyBuffer(m_vk->device, buffer, NULL);
+        return false;
+    }
+
+    VkDeviceMemory buffer_memory = VK_NULL_HANDLE;
+    VkMemoryAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = (size + m_host_memory_alignment - 1) &
+        ~(m_host_memory_alignment - 1);
+    alloc_info.memoryTypeIndex = memory_type_index;
+
+    VkImportMemoryHostPointerInfoEXT import = {};
+    import.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT;
+    import.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT;
+    import.pHostPointer = data_ptr;
+    alloc_info.pNext = &import;
+
+    result = vkAllocateMemory(m_vk->device, &alloc_info, NULL, &buffer_memory);
+
+    if (result != VK_SUCCESS)
+    {
+        vkDestroyBuffer(m_vk->device, buffer, NULL);
+        return false;
+    }
+
+    void* mapped_addr = NULL;
+    result = vkMapMemory(m_vk->device, buffer_memory, 0, VK_WHOLE_SIZE,
+         0, &mapped_addr);
+    if (result != VK_SUCCESS)
+    {
+        vkDestroyBuffer(m_vk->device, buffer, NULL);
+        vkFreeMemory(m_vk->device, buffer_memory, NULL);
+        return false;
+    }
+
+    result = vkBindBufferMemory(m_vk->device, buffer, buffer_memory, 0);
+    if (result != VK_SUCCESS)
+    {
+        vkDestroyBuffer(m_vk->device, buffer, NULL);
+        vkUnmapMemory(m_vk->device, buffer_memory);
+        vkFreeMemory(m_vk->device, buffer_memory, NULL);
+        return false;
+    }
+
+    HostMemoryAllocation& allocation = (*m_host_buffer_memory)[buffer];
+    allocation.m_memory = buffer_memory;
+    allocation.m_data = std::move(data);
+    allocation.m_mapped_addr = mapped_addr;
+    return true;
+#endif
+}   // createHostBuffer
 
 // ----------------------------------------------------------------------------
 void GEVulkanDriver::copyBuffer(VkBuffer src_buffer, VkBuffer dst_buffer,

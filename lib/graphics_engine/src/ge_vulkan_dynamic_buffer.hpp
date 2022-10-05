@@ -10,6 +10,7 @@
 namespace GE
 {
 
+class GEVulkanDriver;
 class GEVulkanDynamicBuffer
 {
 private:
@@ -30,6 +31,9 @@ private:
     void initLocalBuffer(unsigned frame);
     // ------------------------------------------------------------------------
     void destroy();
+    // ------------------------------------------------------------------------
+    void destroyBufferMemory(GEVulkanDriver* vk, VkBuffer buffer,
+                             VmaAllocation buffer_allocation);
 public:
     // ------------------------------------------------------------------------
     GEVulkanDynamicBuffer(VkBufferUsageFlags usage, size_t initial_size,

@@ -39,6 +39,17 @@ GEVulkanDynamicBuffer::~GEVulkanDynamicBuffer()
 }   // ~GEVulkanDynamicBuffer
 
 // ----------------------------------------------------------------------------
+void GEVulkanDynamicBuffer::destroyBufferMemory(GEVulkanDriver* vk,
+                                                VkBuffer buffer,
+                                                VmaAllocation buffer_allocation)
+{
+    if (buffer_allocation)
+        vmaDestroyBuffer(vk->getVmaAllocator(), buffer, buffer_allocation);
+    else
+        vk->destroyHostBuffer(buffer);
+}   // destroyBufferMemory
+
+// ----------------------------------------------------------------------------
 void GEVulkanDynamicBuffer::initHostBuffer(unsigned frame, bool with_transfer)
 {
     GEVulkanDriver* vk = getVKDriver();
@@ -58,6 +69,21 @@ start:
             VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
     }
 
+    if (!with_transfer)
+    {
+        if (!vk->createHostBuffer(m_size,
+            m_usage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, host_info, host_buffer,
+            host_memory))
+        {
+            destroyBufferMemory(vk, host_buffer, host_memory);
+            host_buffer = VK_NULL_HANDLE;
+            host_memory = VK_NULL_HANDLE;
+            goto fallback;
+        }
+        goto end;
+    }
+
+fallback:
     if (!vk->createBuffer(m_size, m_usage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         host_info, host_buffer, host_memory))
     {
@@ -79,12 +105,17 @@ start:
             m_supports_host_transfer = 1;
     }
 
+end:
     VmaAllocationInfo info = {};
-    vmaGetAllocationInfo(vk->getVmaAllocator(), host_memory, &info);
+    if (host_memory)
+        vmaGetAllocationInfo(vk->getVmaAllocator(), host_memory, &info);
 
     m_host_buffer[frame] = host_buffer;
     m_host_memory[frame] = host_memory;
-    m_mapped_addr[frame] = info.pMappedData;
+    if (host_memory)
+        m_mapped_addr[frame] = info.pMappedData;
+    else
+        m_mapped_addr[frame] = vk->getHostBufferMappedAddr(host_buffer);
 }   // initHostBuffer
 
 // ----------------------------------------------------------------------------
@@ -116,8 +147,7 @@ void GEVulkanDynamicBuffer::destroy()
     vk->waitIdle();
     for (unsigned i = 0; i < m_host_buffer.size(); i++)
     {
-        vmaDestroyBuffer(vk->getVmaAllocator(), m_host_buffer[i],
-            m_host_memory[i]);
+        destroyBufferMemory(vk, m_host_buffer[i], m_host_memory[i]);
         m_host_buffer[i] = VK_NULL_HANDLE;
         m_host_memory[i] = VK_NULL_HANDLE;
         m_mapped_addr[i] = NULL;
@@ -157,8 +187,11 @@ void GEVulkanDynamicBuffer::setCurrentData(const std::vector<
         memcpy(addr, p.first, p.second);
         addr += p.second;
     }
-    vmaFlushAllocation(vk->getVmaAllocator(), m_host_memory[cur_frame], 0,
-        size);
+    if (m_host_memory[cur_frame])
+    {
+        vmaFlushAllocation(vk->getVmaAllocator(), m_host_memory[cur_frame], 0,
+            size);
+    }
 
     if (!m_local_buffer.empty())
     {

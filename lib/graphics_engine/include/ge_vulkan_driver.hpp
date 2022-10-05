@@ -16,6 +16,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace irr;
@@ -299,6 +300,31 @@ namespace GE
         bool createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
                           VmaAllocationCreateInfo& alloc_create_info,
                           VkBuffer& buffer, VmaAllocation& buffer_allocation);
+        bool createHostBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+                              VmaAllocationCreateInfo& alloc_create_info,
+                              VkBuffer& buffer, VmaAllocation& buffer_allocation);
+        void* getHostBufferMappedAddr(VkBuffer buffer)
+        {
+            if (!m_host_buffer_memory)
+                return NULL;
+            auto it = m_host_buffer_memory->find(buffer);
+            if (it == m_host_buffer_memory->end())
+                return NULL;
+            return it->second.m_mapped_addr;
+        }
+        bool destroyHostBuffer(VkBuffer buffer)
+        {
+            if (!m_host_buffer_memory)
+                return false;
+            auto it = m_host_buffer_memory->find(buffer);
+            if (it == m_host_buffer_memory->end())
+                return false;
+            vkDestroyBuffer(m_vk->device, it->first, NULL);
+            vkUnmapMemory(m_vk->device, it->second.m_memory);
+            vkFreeMemory(m_vk->device, it->second.m_memory, NULL);
+            m_host_buffer_memory->erase(it);
+            return true;
+        }
         VkPhysicalDevice getPhysicalDevice() const { return m_physical_device; }
         const VkPhysicalDeviceFeatures& getPhysicalDeviceFeatures() const
                                                           { return m_features; }
@@ -509,6 +535,14 @@ namespace GE
 
         std::vector<std::unique_ptr<GEVulkanDrawCall> > m_draw_calls_cache;
         GESPM* m_billboard_quad;
+        struct HostMemoryAllocation
+        {
+            VkDeviceMemory m_memory;
+            std::vector<uint8_t> m_data;
+            void* m_mapped_addr;
+        };
+        std::unordered_map<VkBuffer, HostMemoryAllocation>* m_host_buffer_memory;
+        unsigned m_host_memory_alignment;
 
         void createInstance(SDL_Window* window);
         void findPhysicalDevice();
