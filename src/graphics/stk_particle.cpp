@@ -212,8 +212,6 @@ void STKParticle::setEmitter(scene::IParticleEmitter* emitter)
     delete m_hm;
     m_hm = NULL;
     m_first_execution = true;
-    m_pre_generating = true;
-    m_flips = false;
     m_max_count = emitter->getMaxParticlesPerSecond() * emitter->getMaxLifeTime() / 1000;
 
     switch (emitter->getType())
