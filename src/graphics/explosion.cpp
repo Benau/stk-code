@@ -62,8 +62,9 @@ Explosion::Explosion(const Vec3& coord, const char* explosion_sound, const char 
     
     if (UserConfigParams::m_particles_effects > 1)
     {
-        m_emitter = new ParticleEmitter(particles, coord,  NULL);
-        m_emitter->getNode()->setPreGenerating(false);
+        m_emitter = new ParticleEmitter(particles, coord, NULL,
+             /*randomize_initial_y*/false, /*important*/false,
+             /*pre_generating*/false);
     }
 #endif
 }   // Explosion

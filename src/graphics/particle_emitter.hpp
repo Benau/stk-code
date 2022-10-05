@@ -66,6 +66,7 @@ private:
 
     bool m_important;
 
+    bool m_pre_generating;
 public:
 
     LEAK_CHECK()
@@ -74,7 +75,8 @@ public:
                                  const Vec3 &position,
                                  scene::ISceneNode* parent = NULL,
                                  bool randomize_initial_y =  false,
-                                 bool important = false);
+                                 bool important = false,
+                                 bool pre_generating = true);
     virtual     ~ParticleEmitter();
     virtual void update         (float dt);
     void         setCreationRateAbsolute(float fraction);

@@ -38,7 +38,8 @@ ParticleEmitter::ParticleEmitter(const ParticleKind* type,
                                  const Vec3 &position,
                                  scene::ISceneNode* parent,
                                  bool randomize_initial_y,
-                                 bool important)
+                                 bool important,
+                                 bool pre_generating)
                : m_position(position)
 {
     assert(type != NULL);
@@ -50,6 +51,7 @@ ParticleEmitter::ParticleEmitter(const ParticleKind* type,
     m_emission_decay_rate = 0;
     m_randomize_initial_y = randomize_initial_y;
     m_important = important;
+    m_pre_generating = pre_generating;
 
     setParticleType(type);
     assert(m_node != NULL);
@@ -295,8 +297,6 @@ void ParticleEmitter::setParticleType(const ParticleKind* type)
 
     if (is_new_type)
     {
-        m_node->setEmitter(m_emitter); // this grabs the emitter
-
         if (type->hasScaleAffector())
         {
             m_node->setIncreaseFactor(type->getScaleAffectorFactorX());
@@ -317,10 +317,9 @@ void ParticleEmitter::setParticleType(const ParticleKind* type)
         }
 
         const bool flips = type->getFlips();
-        if (flips)
-        {
-            m_node->setFlips();
-        }
+        m_node->setFlips(flips);
+        m_node->setPreGenerating(m_pre_generating);
+        m_node->setEmitter(m_emitter); // this grabs the emitter
     }
 }   // setParticleType
 
