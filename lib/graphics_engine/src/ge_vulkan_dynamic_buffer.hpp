@@ -24,6 +24,8 @@ private:
 
     size_t m_size, m_real_size;
 
+    bool m_staging_buffer_system_memory;
+
     static int m_supports_host_transfer;
     // ------------------------------------------------------------------------
     void initHostBuffer(unsigned frame, bool with_transfer);
@@ -38,7 +40,8 @@ public:
     // ------------------------------------------------------------------------
     GEVulkanDynamicBuffer(VkBufferUsageFlags usage, size_t initial_size,
                           unsigned host_buffer_size,
-                          unsigned local_buffer_size);
+                          unsigned local_buffer_size,
+                          bool staging_buffer_system_memory = false);
     // ------------------------------------------------------------------------
     ~GEVulkanDynamicBuffer();
     // ------------------------------------------------------------------------

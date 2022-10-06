@@ -14,10 +14,12 @@ int GEVulkanDynamicBuffer::m_supports_host_transfer = -1;
 GEVulkanDynamicBuffer::GEVulkanDynamicBuffer(VkBufferUsageFlags usage,
                                              size_t initial_size,
                                              unsigned host_buffer_size,
-                                             unsigned local_buffer_size)
+                                             unsigned local_buffer_size,
+                                             bool staging_buffer_system_memory)
 {
     m_usage = usage;
     m_size = m_real_size = initial_size;
+    m_staging_buffer_system_memory = staging_buffer_system_memory;
 
     m_host_buffer.resize(host_buffer_size, VK_NULL_HANDLE);
     m_host_memory.resize(host_buffer_size, VK_NULL_HANDLE);
@@ -69,7 +71,7 @@ start:
             VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
     }
 
-    if (!with_transfer)
+    if (m_staging_buffer_system_memory && !with_transfer)
     {
         if (!vk->createHostBuffer(m_size,
             m_usage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, host_info, host_buffer,

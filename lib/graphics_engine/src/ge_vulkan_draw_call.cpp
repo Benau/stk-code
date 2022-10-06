@@ -1032,7 +1032,8 @@ void GEVulkanDrawCall::createVulkanData()
     flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     m_sbo_data = new GEVulkanDynamicBuffer(flags, 10000,
         GEVulkanDriver::getMaxFrameInFlight(),
-        GEVulkanDriver::getMaxFrameInFlight());
+        GEVulkanDriver::getMaxFrameInFlight(),
+        true/*staging_buffer_system_memory*/);
 }   // createVulkanData
 
 // ----------------------------------------------------------------------------
