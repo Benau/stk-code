@@ -1,5 +1,5 @@
 #include "utils/spm_layout.h"
-#include "../utils/get_world_location.vert"
+#include "utils/get_world_location.vert"
 
 layout(push_constant) uniform Constants
 {
