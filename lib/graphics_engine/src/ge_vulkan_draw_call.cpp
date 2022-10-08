@@ -413,7 +413,7 @@ void GEVulkanDrawCall::generate()
             std::string sorting_key =
                 std::string(1, settings.m_drawing_priority) + cur_shader;
             m_cmds.push_back({ cmd, cur_shader, sorting_key, p.first,
-                settings.isTransparent() });
+                settings.isTransparent(), 0 });
             if (!skip_instance_key && it == cur_key.end())
                  cur_key.push_back(key);
         }
@@ -470,30 +470,9 @@ void GEVulkanDrawCall::generate()
             std::string sorting_key =
                 std::string(1, settings.m_drawing_priority) + cur_shader;
             m_cmds.push_back({ cmd, cur_shader, sorting_key, p.first,
-                settings.isTransparent() });
+                settings.isTransparent(), 0 });
         }
     }
-
-    if (!bind_mesh_textures)
-    {
-        std::stable_sort(m_cmds.begin(), m_cmds.end(),
-            [this](const DrawCallData& a, const DrawCallData& b)
-            {
-                return m_materials[a.m_mb] < m_materials[b.m_mb];
-            });
-    }
-
-    std::stable_sort(m_cmds.begin(), m_cmds.end(),
-        [](const DrawCallData& a, const DrawCallData& b)
-        {
-            return a.m_sorting_key < b.m_sorting_key;
-        });
-
-    std::stable_partition(m_cmds.begin(), m_cmds.end(),
-        [](const DrawCallData& a)
-        {
-            return !a.m_transparent;
-        });
 
     if (use_base_vertex)
     {
@@ -525,16 +504,37 @@ void GEVulkanDrawCall::generate()
                     data_uploading.emplace_back((void*)m_data_padding,
                         cur_padding);
                 }
-                m_sbo_data_offset.push_back(m_object_data_padded_size);
+                cmd.m_dynamic_offset = m_object_data_padded_size;
                 offset_map[cmd.m_cmd.firstInstance] = m_object_data_padded_size;
                 m_object_data_padded_size += instance_size;
             }
             else
             {
-                m_sbo_data_offset.push_back(offset_map.at(first_instance));
+                cmd.m_dynamic_offset = offset_map.at(first_instance);
             }
         }
     }
+
+    if (!bind_mesh_textures)
+    {
+        std::stable_sort(m_cmds.begin(), m_cmds.end(),
+            [this](const DrawCallData& a, const DrawCallData& b)
+            {
+                return m_materials[a.m_mb] < m_materials[b.m_mb];
+            });
+    }
+
+    std::stable_sort(m_cmds.begin(), m_cmds.end(),
+        [](const DrawCallData& a, const DrawCallData& b)
+        {
+            return a.m_sorting_key < b.m_sorting_key;
+        });
+
+    std::stable_partition(m_cmds.begin(), m_cmds.end(),
+        [](const DrawCallData& a)
+        {
+            return !a.m_transparent;
+        });
 
     m_materials_padded_size = 0;
     if (bind_mesh_textures && !m_cmds.empty())
@@ -1366,7 +1366,7 @@ void GEVulkanDrawCall::render(GEVulkanDriver* vk, GEVulkanCameraSceneNode* cam,
                 std::array<uint32_t, 3> dynamic_offsets =
                 {{
                     0u,
-                    uint32_t(m_sbo_data_offset[i]),
+                    m_cmds[i].m_dynamic_offset,
                     0u
                 }};
                 vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
