@@ -1727,6 +1727,8 @@ bool GEVulkanDriver::endScene()
         handleDeletedTextures();
         destroySwapChainRelated(false/*handle_surface*/);
         createSwapChainRelated(false/*handle_surface*/);
+        if (m_particle_manager)
+            m_particle_manager->reset();
         return true;
     }
 
@@ -1743,6 +1745,8 @@ bool GEVulkanDriver::endScene()
         video::CNullDriver::endScene();
         GEVulkan2dRenderer::clear();
         handleDeletedTextures();
+        if (m_particle_manager)
+            m_particle_manager->reset();
         return false;
     }
 
@@ -1799,6 +1803,9 @@ bool GEVulkanDriver::endScene()
         result = vkQueuePresentKHR(present_queue, &present_info);
         ul.unlock();
     }
+    if (m_particle_manager)
+        m_particle_manager->reset();
+
     if (!video::CNullDriver::endScene())
         return false;
 

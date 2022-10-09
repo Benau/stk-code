@@ -335,10 +335,9 @@ void GEVulkanParticleManager::renderParticles(GEVulkanSceneManager* sm)
              &p->getConfig());
         vkCmdDispatch(cmd, p->getConfig().m_max_count / 4, 1, 1);
         p->getConfig().m_first_execution = 0;
-        offset +=  p->getConfig().m_max_count * m_global_config.m_camera_count;
+        offset += p->getConfig().m_max_count * m_global_config.m_camera_count;
     }
     endCommand();
-    m_rendering_particles.clear();
 }   // renderParticles
 
 // ----------------------------------------------------------------------------
