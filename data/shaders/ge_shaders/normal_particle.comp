@@ -1,0 +1,86 @@
+#include "utils/gpu_particle_data.h"
+#include "utils/get_world_location.vert"
+#include "utils/object_data.h"
+
+struct ParticleConfig
+{
+    vec3 m_translation;
+    uint m_max_count;
+
+    vec4 m_rotation;
+
+    vec3 m_scale;
+    uint m_active_count;
+
+    uint m_color_from;
+    uint m_color_to;
+    float m_size_increase_factor;
+    int m_material_id;
+
+    uint m_offset;
+    uint m_first_execution;
+    uint m_flips;
+    uint m_pre_generating;
+};
+
+layout(std140, binding = 0) readonly buffer InitialParticle
+{
+   GPUParticleData m_data[];
+} u_initial_particle;
+
+layout(std140, binding = 1) buffer CurrentParticle
+{
+   GPUParticleData m_data[];
+} u_current_particle;
+
+layout(std140, set = 1, binding = 0) buffer RenderedParticle
+{
+   ObjectData m_data[];
+} u_rendered_particle;
+
+layout(std140, set = 1, binding = 1) uniform GlobalConfig
+{
+    vec4 m_camera_rotation[MAX_CAMERA_SIZE];
+    uint m_camera_count;
+    float m_dt;
+    uint m_unused_1;
+    uint m_unused_2;
+} u_global_config;
+
+layout(std140, set = 2, binding = 0) buffer CurrentParticleConfig
+{
+    ParticleConfig m_data;
+} u_particle_config;
+
+layout (local_size_x = 256) in;
+
+void main()
+{
+    uint p_idx = gl_GlobalInvocationID.x;
+    if (p_idx >= u_particle_config.m_data.m_max_count)
+        return;
+
+    GPUParticleData initial_particle = u_initial_particle.m_data[p_idx];
+    for (uint i = 0; i < u_global_config.m_camera_count; i++)
+    {
+        uint pos = i * u_particle_config.m_data.m_max_count + p_idx +
+            u_particle_config.m_data.m_offset;
+        u_rendered_particle.m_data[pos].m_translation = getWorldPosition(
+            u_particle_config.m_data.m_translation,
+            u_particle_config.m_data.m_rotation,
+            u_particle_config.m_data.m_scale,
+            initial_particle.m_position).xyz;
+        u_rendered_particle.m_data[pos].m_rotation =
+            u_global_config.m_camera_rotation[i];
+        u_rendered_particle.m_data[pos].m_scale.x = initial_particle.m_size / 2.;
+        u_rendered_particle.m_data[pos].m_scale.y = initial_particle.m_size / 2.;
+        u_rendered_particle.m_data[pos].m_scale.z = 0;
+        u_rendered_particle.m_data[pos].m_skinning_offest = 0;
+        u_rendered_particle.m_data[pos].m_material_id =
+            u_particle_config.m_data.m_material_id;
+        u_rendered_particle.m_data[pos].m_texture_trans.x = 0.;
+        u_rendered_particle.m_data[pos].m_texture_trans.y = 0.;
+        u_rendered_particle.m_data[pos].m_hue_change = 0.;
+        u_rendered_particle.m_data[pos].m_custom_vertex_color = uint(-1);
+    }
+}

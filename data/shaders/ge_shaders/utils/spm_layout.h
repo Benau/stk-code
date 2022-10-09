@@ -2,6 +2,8 @@
 #extension GL_ARB_shader_draw_parameters : enable
 #endif
 
+#include "object_data.h"
+
 layout(std140, set = 1, binding = 0) uniform CameraBuffer
 {
     mat4 m_view_matrix;
@@ -11,18 +13,6 @@ layout(std140, set = 1, binding = 0) uniform CameraBuffer
     mat4 m_projection_view_matrix;
     mat4 m_inverse_projection_view_matrix;
 } u_camera;
-
-struct ObjectData
-{
-    vec3 m_translation;
-    float m_hue_change;
-    vec4 m_rotation;
-    vec3 m_scale;
-    uint m_custom_vertex_color;
-    int m_skinning_offest;
-    int m_material_id;
-    vec2 m_texture_trans;
-};
 
 layout(std140, set = 1, binding = 1) readonly buffer ObjectBuffer
 {
