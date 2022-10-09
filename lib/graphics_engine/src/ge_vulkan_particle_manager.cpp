@@ -11,6 +11,7 @@
 #include "ge_vulkan_scene_manager.hpp"
 #include "ge_vulkan_shader_manager.hpp"
 
+#include "IParticleSystemSceneNode.h"
 #include "mini_glm.hpp"
 
 #include <array>
@@ -330,6 +331,32 @@ void GEVulkanParticleManager::renderParticles(GEVulkanSceneManager* sm)
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
             m_pipeline_layout, 0, 1, p->getDescriptorSet(), 0, NULL);
         p->getConfig().m_offset = offset;
+        const irr::core::matrix4& model_mat =
+            p->getNode()->getAbsoluteTransformation();
+        memcpy(&p->getConfig().m_translation.X, &model_mat[12],
+            sizeof(irr::core::vector3df));
+        irr::core::quaternion rotation(0.0f, 0.0f, 0.0f, 1.0f);
+        irr::core::vector3df scale = model_mat.getScale();
+        if (scale.X != 0.0f && scale.Y != 0.0f && scale.Z != 0.0f)
+        {
+            irr::core::matrix4 local_mat = model_mat;
+            local_mat[0] = local_mat[0] / scale.X / local_mat[15];
+            local_mat[1] = local_mat[1] / scale.X / local_mat[15];
+            local_mat[2] = local_mat[2] / scale.X / local_mat[15];
+            local_mat[4] = local_mat[4] / scale.Y / local_mat[15];
+            local_mat[5] = local_mat[5] / scale.Y / local_mat[15];
+            local_mat[6] = local_mat[6] / scale.Y / local_mat[15];
+            local_mat[8] = local_mat[8] / scale.Z / local_mat[15];
+            local_mat[9] = local_mat[9] / scale.Z / local_mat[15];
+            local_mat[10] = local_mat[10] / scale.Z / local_mat[15];
+            rotation = MiniGLM::getQuaternion(local_mat);
+            // Conjugated quaternion in glsl
+            rotation.W = -rotation.W;
+        }
+        memcpy(&p->getConfig().m_rotation.X, &rotation,
+            sizeof(irr::core::quaternion));
+        memcpy(&p->getConfig().m_scale.X, &scale,
+            sizeof(irr::core::vector3df));
         vkCmdPushConstants(cmd, m_pipeline_layout,
              VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEGPUParticleConfig),
              &p->getConfig());

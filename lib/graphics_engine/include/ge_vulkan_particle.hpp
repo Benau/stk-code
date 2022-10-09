@@ -78,6 +78,8 @@ public:
     // ------------------------------------------------------------------------
     GEGPUParticleConfig& getConfig()                       { return m_config; }
     // ------------------------------------------------------------------------
+    irr::scene::IParticleSystemSceneNode* getNode() const    { return m_node; }
+    // ------------------------------------------------------------------------
     VkDescriptorSet* getDescriptorSet()           { return &m_descriptor_set; }
 };   // GEVulkanParticle
 
