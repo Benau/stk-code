@@ -43,7 +43,8 @@ layout(std140, set = 1, binding = 1) uniform GlobalConfig
     vec4 m_camera_rotation[MAX_CAMERA_SIZE];
     uint m_camera_count;
     float m_dt;
-    uint m_unused[2];
+    uint m_unused_1;
+    uint m_unused_2;
 } u_global_config;
 
 layout (local_size_x = 4) in;

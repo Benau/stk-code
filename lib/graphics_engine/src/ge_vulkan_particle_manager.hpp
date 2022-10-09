@@ -20,7 +20,8 @@ struct GEParticleGlobalConfig
     irr::core::quaternion m_camera_rotation[getMaxCameraCount()];
     unsigned m_camera_count;
     float m_dt;
-    unsigned m_unused[2];
+    unsigned m_unused_1;
+    unsigned m_unused_2;
 };
 
 class GEVulkanDriver;

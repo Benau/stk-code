@@ -183,7 +183,7 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
 
     VkPushConstantRange push_constant;
     push_constant.offset = 0;
-    push_constant.size = sizeof(GEParticleGlobalConfig);
+    push_constant.size = sizeof(GEGPUParticleConfig);
     push_constant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     pipeline_layout_info.pPushConstantRanges = &push_constant;
     pipeline_layout_info.pushConstantRangeCount = 1;
@@ -365,7 +365,7 @@ void GEVulkanParticleManager::updateDescriptorSet()
         VkDescriptorBufferInfo ubo;
         ubo.buffer = m_ubo->getLocalBuffer()[i];
         ubo.offset = 0;
-        ubo.range = VK_WHOLE_SIZE;
+        ubo.range = sizeof(GEParticleGlobalConfig);
 
         write_descriptor_sets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write_descriptor_sets[0].dstBinding = 0;
