@@ -1752,15 +1752,33 @@ bool GEVulkanDriver::endScene()
 
     buildCommandBuffers();
 
-    VkSemaphore wait_semaphores[] = {m_vk->image_available_semaphores[m_current_frame]};
-    VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    std::vector<VkSemaphore> wait_semaphores =
+    {
+        m_vk->image_available_semaphores[m_current_frame]
+    };
+    std::vector<VkPipelineStageFlags> wait_stages =
+    {
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+    };
+    if (m_particle_manager)
+    {
+        VkSemaphore particle_sem = m_particle_manager->getSemaphore();
+        if (particle_sem != VK_NULL_HANDLE)
+        {
+            wait_semaphores.push_back(particle_sem);
+            wait_stages.push_back(
+                VK_PIPELINE_STAGE_TRANSFER_BIT |
+                VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+        }
+    }
     VkSemaphore signal_semaphores[] = {m_vk->render_finished_semaphores[m_current_frame]};
 
     VkSubmitInfo submit_info = {};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.waitSemaphoreCount = 1;
-    submit_info.pWaitSemaphores = wait_semaphores;
-    submit_info.pWaitDstStageMask = wait_stages;
+    submit_info.waitSemaphoreCount = wait_semaphores.size();
+    submit_info.pWaitSemaphores = wait_semaphores.data();
+    submit_info.pWaitDstStageMask = wait_stages.data();
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &m_vk->command_buffers[m_current_frame];
     submit_info.signalSemaphoreCount = 1;
