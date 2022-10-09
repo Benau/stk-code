@@ -302,15 +302,16 @@ void ParticleEmitter::setParticleType(const ParticleKind* type)
             m_node->setIncreaseFactor(type->getScaleAffectorFactorX());
         }
 
+        video::SColor color_from = (video::SColor)-1;
+        video::SColor color_to = (video::SColor)-1;
         if (type->getMinColor() != type->getMaxColor())
         {
-
-            video::SColor color_from = type->getMinColor();
+            color_from = type->getMinColor();
             m_node->setColorFrom(color_from.getRed() / 255.0f,
                 color_from.getGreen() / 255.0f,
                 color_from.getBlue() / 255.0f);
 
-            video::SColor color_to = type->getMaxColor();
+            color_to = type->getMaxColor();
             m_node->setColorTo(color_to.getRed() / 255.0f,
                 color_to.getGreen() / 255.0f,
                 color_to.getBlue() / 255.0f);
@@ -320,6 +321,7 @@ void ParticleEmitter::setParticleType(const ParticleKind* type)
         m_node->setFlips(flips);
         m_node->setPreGenerating(m_pre_generating);
         m_node->setEmitter(m_emitter); // this grabs the emitter
+        m_node->initVulkanParticle(color_from, color_to);
     }
 }   // setParticleType
 

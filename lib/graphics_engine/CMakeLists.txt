@@ -88,6 +88,8 @@ set(GE_SOURCES
     src/ge_vulkan_scene_manager.cpp
     src/ge_vulkan_shader_manager.cpp
     src/ge_vulkan_skybox_renderer.cpp
+    src/ge_vulkan_particle.cpp
+    src/ge_vulkan_particle_manager.cpp
     src/ge_vulkan_texture.cpp
     src/ge_vulkan_texture_descriptor.cpp
     src/ge_gl_texture.cpp

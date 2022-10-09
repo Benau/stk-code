@@ -14,6 +14,7 @@
 #include "ge_vulkan_fbo_texture.hpp"
 #include "ge_vulkan_features.hpp"
 #include "ge_vulkan_mesh_cache.hpp"
+#include "ge_vulkan_particle_manager.hpp"
 #include "ge_vulkan_scene_manager.hpp"
 #include "ge_vulkan_shader_manager.hpp"
 #include "ge_vulkan_skybox_renderer.hpp"
@@ -504,7 +505,7 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
                 m_depth_texture(NULL), m_mesh_texture_descriptor(NULL),
                 m_rtt_texture(NULL), m_prev_rtt_texture(NULL),
                 m_separate_rtt_texture(NULL), m_rtt_polycount(0),
-                m_billboard_quad(NULL)
+                m_billboard_quad(NULL), m_particle_manager(NULL)
 {
     m_vk.reset(new VK());
     m_physical_device = VK_NULL_HANDLE;
@@ -633,10 +634,14 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
     {
         GEVulkanCommandLoader::init(this);
         createCommandBuffers();
-
         GEVulkanShaderManager::init(this);
         // For GEVulkanDynamicBuffer
         GE::setVideoDriver(this);
+        size_t alignment = m_properties.limits.minStorageBufferOffsetAlignment;
+        if (alignment > sizeof(ObjectData))
+            getGEConfig()->m_gpu_particle = false;
+        if (getGEConfig()->m_gpu_particle)
+            m_particle_manager = new GEVulkanParticleManager(this);
         createUnicolorTextures();
         GEVulkan2dRenderer::init(this);
         GEVulkanSkyBoxRenderer::init();
@@ -690,6 +695,11 @@ void GEVulkanDriver::destroyVulkan()
     {
         getVulkanMeshCache()->removeMesh(m_billboard_quad);
         m_billboard_quad = NULL;
+    }
+    if (m_particle_manager)
+    {
+        delete m_particle_manager;
+        m_particle_manager = NULL;
     }
 
     if (m_irrlicht_device->getSceneManager() &&
@@ -769,7 +779,7 @@ void GEVulkanDriver::createInstance(SDL_Window* window)
     VkInstanceCreateInfo create_info = {};
     std::vector<const char*> enabled_validation_layers;
 
-#ifdef ENABLE_VALIDATION
+#if 1
     g_debug_print = true;
     for (VkLayerProperties& prop : available_layers)
     {
@@ -1696,7 +1706,15 @@ bool GEVulkanDriver::endScene()
     if (g_paused_rendering.load())
     {
         GEVulkan2dRenderer::clear();
+        if (m_particle_manager)
+            m_particle_manager->reset();
         return false;
+    }
+
+    if (m_particle_manager)
+    {
+        m_particle_manager->renderParticles(static_cast<GEVulkanSceneManager*>(
+            m_irrlicht_device->getSceneManager()));
     }
 
     VkFence fence = m_vk->in_flight_fences[m_current_frame];

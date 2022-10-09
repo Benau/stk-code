@@ -82,6 +82,8 @@ private:
 
     static GLuint m_flips_buffer;
 
+    GE::GEVulkanParticle* m_vk_particle;
+
     // ------------------------------------------------------------------------
     void generateParticlesFromPointEmitter(scene::IParticlePointEmitter*);
     // ------------------------------------------------------------------------
@@ -101,10 +103,7 @@ public:
         const core::vector3df& rotation = core::vector3df(0, 0, 0),
         const core::vector3df& scale = core::vector3df(1.0f, 1.0f, 1.0f));
     // ------------------------------------------------------------------------
-    ~STKParticle()
-    {
-        delete m_hm;
-    }
+    ~STKParticle();
     // ------------------------------------------------------------------------
     void setColorFrom(float r, float g, float b)
     {
@@ -123,6 +122,9 @@ public:
     virtual void setEmitter(scene::IParticleEmitter* emitter);
     // ------------------------------------------------------------------------
     virtual void OnRegisterSceneNode();
+    // ------------------------------------------------------------------------
+    void initVulkanParticle(irr::video::SColor color_from,
+                            irr::video::SColor color_to);
     // ------------------------------------------------------------------------
     void setIncreaseFactor(float val)         { m_size_increase_factor = val; }
     // ------------------------------------------------------------------------
@@ -160,6 +162,15 @@ public:
         assert(m_flips_buffer != 0);
         return m_flips_buffer;
     }
+    // ------------------------------------------------------------------------
+    virtual unsigned getActiveCount() const
+    {
+        return Emitter->getMaxLifeTime() *
+            Emitter->getMaxParticlesPerSecond() / 1000;
+    }
+    // ------------------------------------------------------------------------
+    virtual GE::GEVulkanParticle* getVulkanParticle() const
+                                                      { return m_vk_particle; }
 };
 
 #endif

@@ -24,6 +24,9 @@
 #include "guiengine/engine.hpp"
 
 #include <cmath>
+#include <ge_main.hpp>
+#include <ge_vulkan_particle.hpp>
+
 #include "../../lib/irrlicht/source/Irrlicht/os.h"
 
 // ----------------------------------------------------------------------------
@@ -50,8 +53,19 @@ STKParticle::STKParticle(bool randomize_initial_y, ISceneNode* parent, s32 id,
     m_randomize_initial_y = randomize_initial_y;
     m_flips = false;
     m_max_count = 0;
+    m_vk_particle = NULL;
+    if (GE::getGEConfig()->m_gpu_particle &&
+        GE::getDriver()->getDriverType() == video::EDT_VULKAN)
+        m_vk_particle = new GE::GEVulkanParticle();
     drop();
 }   // STKParticle
+
+// ----------------------------------------------------------------------------
+STKParticle::~STKParticle()
+{
+    delete m_hm;
+    delete m_vk_particle;
+}   // ~STKParticle
 
 // ----------------------------------------------------------------------------
 static void generateLifetimeSizeDirection(scene::IParticleEmitter *emitter,
@@ -231,6 +245,18 @@ void STKParticle::setEmitter(scene::IParticleEmitter* emitter)
         assert(false && "Wrong particle type");
     }
 }   // setEmitter
+
+// ----------------------------------------------------------------------------
+void STKParticle::initVulkanParticle(irr::video::SColor color_from,
+                                     irr::video::SColor color_to)
+{
+    if (m_vk_particle)
+    {
+        m_vk_particle->init((void*)m_initial_particles.data(),
+            (void*)m_particles_generating.data(), this, m_size_increase_factor,
+            color_from, color_to, m_flips, m_pre_generating);
+    }
+}   // initVulkanParticle
 
 // ----------------------------------------------------------------------------
 void STKParticle::generate(std::vector<CPUParticle>* out)
@@ -501,6 +527,50 @@ void STKParticle::OnRegisterSceneNode()
         Log::warn("STKParticle", "Don't call OnRegisterSceneNode with GLSL");
         return;
     }
+    if (m_vk_particle)
+    {
+        if (m_first_execution)
+        {
+            std::vector<CPUParticle> out;
+            generate(&out);
+        }
+        Particles.clear();
+        Buffer->BoundingBox.reset(AbsoluteTransformation.getTranslation());
+        for (unsigned i = 0; i < m_initial_particles.size(); i++)
+        {
+            scene::SParticle p;
+            p.startTime = 0;
+            p.endTime = 0;
+            p.color = 0;
+            p.startColor = 0;
+            AbsoluteTransformation.transformVect(p.pos,
+                m_initial_particles[i].m_position);
+
+            Buffer->BoundingBox.addInternalPoint(p.pos);
+            p.size = core::dimension2df(m_initial_particles[i].m_size,
+                m_initial_particles[i].m_size);
+            core::vector3df ret = m_color_from + (m_color_to - m_color_from) *
+                m_initial_particles[i].m_lifetime;
+            float alpha = 1.0f - m_initial_particles[i].m_lifetime;
+            alpha = glslSmoothstep(0.0f, 0.35f, alpha);
+            alpha = 1.0f;
+            p.color.setRed(core::clamp((int)(ret.X * 255.0f), 0, 255));
+            p.color.setGreen(core::clamp((int)(ret.Y * 255.0f), 0, 255));
+            p.color.setBlue(core::clamp((int)(ret.Z * 255.0f), 0, 255));
+            p.color.setAlpha(core::clamp((int)(alpha * 255.0f), 0, 255));
+            Particles.push_back(p);
+        }
+        core::matrix4 inv(AbsoluteTransformation, core::matrix4::EM4CONST_INVERSE);
+        inv.transformBoxEx(Buffer->BoundingBox);
+
+        if (IsVisible)
+        {
+            SceneManager->registerNodeForRendering(this);
+            ISceneNode::OnRegisterSceneNode();
+        }
+        return;
+    }
+
     generate(NULL);
     Particles.clear();
     Buffer->BoundingBox.reset(AbsoluteTransformation.getTranslation());
