@@ -333,7 +333,8 @@ void GEVulkanParticleManager::renderParticles(GEVulkanSceneManager* sm)
         vkCmdPushConstants(cmd, m_pipeline_layout,
              VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEGPUParticleConfig),
              &p->getConfig());
-        vkCmdDispatch(cmd, p->getConfig().m_max_count / 256 , 0, 0);
+        vkCmdDispatch(cmd, p->getConfig().m_max_count / 4, 1, 1);
+        p->getConfig().m_first_execution = 0;
         offset +=  p->getConfig().m_max_count * m_global_config.m_camera_count;
     }
     endCommand();
