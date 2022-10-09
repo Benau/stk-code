@@ -43,8 +43,8 @@ struct GEGPUParticleConfig
 
     unsigned m_offset;
     unsigned m_first_execution;
-    unsigned m_pre_generating;
     unsigned m_flips;
+    unsigned m_pre_generating;
 };
 
 class GEVulkanDynamicBuffer;
@@ -78,7 +78,7 @@ public:
     // ------------------------------------------------------------------------
     GEGPUParticleConfig& getConfig()                       { return m_config; }
     // ------------------------------------------------------------------------
-    VkDescriptorSet getDescriptorSet() const       { return m_descriptor_set; }
+    VkDescriptorSet* getDescriptorSet()           { return &m_descriptor_set; }
 };   // GEVulkanParticle
 
 }

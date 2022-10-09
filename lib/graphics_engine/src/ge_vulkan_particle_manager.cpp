@@ -1,6 +1,7 @@
 #include "ge_vulkan_particle_manager.hpp"
 
 #include "ge_main.hpp"
+#include "ge_vulkan_camera_scene_node.hpp"
 #include "ge_vulkan_command_loader.hpp"
 #include "ge_vulkan_draw_call.hpp"
 #include "ge_vulkan_driver.hpp"
@@ -9,6 +10,8 @@
 #include "ge_vulkan_particle.hpp"
 #include "ge_vulkan_scene_manager.hpp"
 #include "ge_vulkan_shader_manager.hpp"
+
+#include "mini_glm.hpp"
 
 #include <array>
 #include <exception>
@@ -148,9 +151,9 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
             "GEVulkanParticleManager: vkCreateDescriptorPool failed");
     }
 
-    // m_descriptor_set
-    m_descriptor_set.resize(m_vk->getMaxFrameInFlight());
-    std::vector<VkDescriptorSetLayout> layouts(m_descriptor_set.size(),
+    // m_descriptor_sets
+    m_descriptor_sets.resize(m_vk->getMaxFrameInFlight());
+    std::vector<VkDescriptorSetLayout> layouts(m_descriptor_sets.size(),
         m_global_set_layout);
 
     VkDescriptorSetAllocateInfo set_alloc_info = {};
@@ -160,7 +163,7 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
     set_alloc_info.pSetLayouts = layouts.data();
 
     if (vkAllocateDescriptorSets(m_vk->getDevice(), &set_alloc_info,
-        m_descriptor_set.data()) != VK_SUCCESS)
+        m_descriptor_sets.data()) != VK_SUCCESS)
     {
         throw std::runtime_error(
             "GEVulkanParticleManager: vkAllocateDescriptorSets failed");
@@ -299,14 +302,40 @@ void GEVulkanParticleManager::renderParticles(GEVulkanSceneManager* sm)
         return;
     lockManager();
     size_t required_size = 0;
+    m_global_config.m_camera_count = sm->getDrawCalls().size();
+    int idx = 0;
+    for (auto& p : sm->getDrawCalls())
+    {
+        m_global_config.m_camera_rotation[idx++] =
+            MiniGLM::getQuaternion(p.first->getViewMatrix());
+    }
+
     for (GEVulkanParticle* p : m_rendering_particles)
         required_size += p->getConfig().m_max_count * sizeof(ObjectData);
-    required_size *= sm->getDrawCalls().size();
+    required_size *= m_global_config.m_camera_count;
     if (m_generated_data->resizeIfNeeded(required_size))
         updateDescriptorSet();
 
     VkCommandBuffer cmd = beginCommand();
-    
+    m_ubo->setCurrentData(&m_global_config, sizeof(GEParticleGlobalConfig),
+        cmd);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline);
+    const unsigned cur_frame = m_vk->getCurrentFrame();
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+        m_pipeline_layout, 1, 1, &m_descriptor_sets[cur_frame], 0, NULL);
+
+    unsigned offset = 0;
+    for (GEVulkanParticle* p : m_rendering_particles)
+    {
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+            m_pipeline_layout, 0, 1, p->getDescriptorSet(), 0, NULL);
+        p->getConfig().m_offset = offset;
+        vkCmdPushConstants(cmd, m_pipeline_layout,
+             VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEGPUParticleConfig),
+             &p->getConfig());
+        vkCmdDispatch(cmd, p->getConfig().m_max_count / 256 , 0, 0);
+        offset +=  p->getConfig().m_max_count * m_global_config.m_camera_count;
+    }
     endCommand();
     m_rendering_particles.clear();
 }   // renderParticles
@@ -325,7 +354,7 @@ std::unique_lock<std::mutex> GEVulkanParticleManager::getRequiredQueue(
 // ----------------------------------------------------------------------------
 void GEVulkanParticleManager::updateDescriptorSet()
 {
-    for (unsigned i = 0; i < m_descriptor_set.size(); i++)
+    for (unsigned i = 0; i < m_descriptor_sets.size(); i++)
     {
         std::array<VkWriteDescriptorSet, 2> write_descriptor_sets = {};
         VkDescriptorBufferInfo sbo;
@@ -344,7 +373,7 @@ void GEVulkanParticleManager::updateDescriptorSet()
         write_descriptor_sets[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         write_descriptor_sets[0].descriptorCount = 1;
         write_descriptor_sets[0].pBufferInfo = &sbo;
-        write_descriptor_sets[0].dstSet = m_descriptor_set[i];
+        write_descriptor_sets[0].dstSet = m_descriptor_sets[i];
 
         write_descriptor_sets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write_descriptor_sets[1].dstBinding = 1;
@@ -352,7 +381,7 @@ void GEVulkanParticleManager::updateDescriptorSet()
         write_descriptor_sets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         write_descriptor_sets[1].descriptorCount = 1;
         write_descriptor_sets[1].pBufferInfo = &ubo;
-        write_descriptor_sets[1].dstSet = m_descriptor_set[i];
+        write_descriptor_sets[1].dstSet = m_descriptor_sets[i];
 
         vkUpdateDescriptorSets(m_vk->getDevice(), write_descriptor_sets.size(),
             write_descriptor_sets.data(), 0, NULL);

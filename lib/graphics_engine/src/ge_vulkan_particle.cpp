@@ -84,9 +84,11 @@ void GEVulkanParticle::init(void* initial, void* initial_generating,
     m_config.m_max_count = node->getMaxCount();
     m_config.m_active_count = node->getActiveCount();
     m_config.m_size_increase_factor = size_increase_factor;
-    m_config.m_flips = flips;
     m_config.m_color_from = color_from;
     m_config.m_color_to = color_to;
+    m_config.m_first_execution = 1;
+    m_config.m_flips = flips;
+    m_config.m_pre_generating = pre_generating;
 
     GEVulkanDriver* vk = getVKDriver();
     vk->setDisableWaitIdle(true);

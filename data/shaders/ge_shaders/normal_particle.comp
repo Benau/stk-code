@@ -19,8 +19,8 @@ layout(std140, push_constant) uniform ParticleConfig
 
     uint m_offset;
     uint m_first_execution;
-    uint m_pre_generating;
     uint m_flips;
+    uint m_pre_generating;
 } u_config;
 
 layout(std140, binding = 0) readonly buffer InitialParticle
