@@ -11,6 +11,7 @@
 #include "ge_vulkan_command_loader.hpp"
 #include "ge_vulkan_depth_texture.hpp"
 #include "ge_vulkan_draw_call.hpp"
+#include "ge_vulkan_dynamic_buffer.hpp"
 #include "ge_vulkan_fbo_texture.hpp"
 #include "ge_vulkan_features.hpp"
 #include "ge_vulkan_mesh_cache.hpp"
@@ -2426,6 +2427,24 @@ void GEVulkanDriver::buildCommandBuffers()
         &begin_info);
     if (result != VK_SUCCESS)
         return;
+
+    if (m_particle_manager && m_particle_manager->getGeneratedData() &&
+        GEVulkanFeatures::supportsSeparatedComputeQueue())
+    {
+        VkBufferMemoryBarrier barrier = {};
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.srcQueueFamilyIndex = getComputeFamily();
+        barrier.dstQueueFamilyIndex = getGraphicsFamily();
+        barrier.buffer =
+            m_particle_manager->getGeneratedData()->getCurrentBuffer();
+        barrier.offset = 0;
+        barrier.size = VK_WHOLE_SIZE;
+
+        vkCmdPipelineBarrier(getCurrentCommandBuffer(),
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 1, &barrier, 0, NULL);
+    }
 
     GEVulkan2dRenderer::uploadTrisBuffers();
     for (auto& p : static_cast<GEVulkanSceneManager*>(

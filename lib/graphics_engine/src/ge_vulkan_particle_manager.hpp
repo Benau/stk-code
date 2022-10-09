@@ -41,8 +41,6 @@ class GEVulkanParticleManager
     VkCommandBuffer m_command_buffer;
     VkSemaphore m_semaphore;
 
-    bool m_wait_semaphore;
-
     unsigned m_graphics_queue_idx;
 
     GEParticleGlobalConfig m_global_config;
@@ -81,7 +79,7 @@ public:
                                            { m_rendering_particles.insert(p); }
     // ------------------------------------------------------------------------
     VkSemaphore getSemaphore() const
-                    { return m_wait_semaphore ? m_semaphore : VK_NULL_HANDLE; }
+       { return m_rendering_particles.empty() ? VK_NULL_HANDLE : m_semaphore; }
     // ------------------------------------------------------------------------
     void renderParticles(GEVulkanSceneManager* sm);
     // ------------------------------------------------------------------------
@@ -99,6 +97,9 @@ public:
     // ------------------------------------------------------------------------
     VkDescriptorSetLayout getParticleSetLayout() const
                                               { return m_particle_set_layout; }
+    // ------------------------------------------------------------------------
+    GEVulkanDynamicBuffer* getGeneratedData() const
+            { return m_rendering_particles.empty() ? NULL : m_generated_data; }
 };   // GEVulkanParticleManager
 
 }

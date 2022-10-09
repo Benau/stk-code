@@ -80,7 +80,6 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
         throw std::runtime_error(
             "GEVulkanParticleManager: vkCreateSemaphore failed");
     }
-    m_wait_semaphore = false;
 
     // m_particle_set_layout
     std::vector<VkDescriptorSetLayoutBinding> particle_layout_binding;
@@ -270,12 +269,9 @@ void GEVulkanParticleManager::endCommand(bool blocking)
     submit_info.pCommandBuffers = &m_command_buffer;
     if (!m_rendering_particles.empty())
     {
-        m_wait_semaphore = true;
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = &m_semaphore;
     }
-    else
-        m_wait_semaphore = false;
 
     auto submit = [this, submit_info]()
     {
@@ -322,6 +318,7 @@ void GEVulkanParticleManager::renderParticles(GEVulkanSceneManager* sm)
         cmd);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline);
     const unsigned cur_frame = m_vk->getCurrentFrame();
+
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
         m_pipeline_layout, 1, 1, &m_descriptor_sets[cur_frame], 0, NULL);
 
@@ -364,6 +361,23 @@ void GEVulkanParticleManager::renderParticles(GEVulkanSceneManager* sm)
         p->getConfig().m_first_execution = 0;
         offset += p->getConfig().m_max_count * m_global_config.m_camera_count;
     }
+
+    if (GEVulkanFeatures::supportsSeparatedComputeQueue())
+    {
+        VkBufferMemoryBarrier barrier = {};
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.srcQueueFamilyIndex = m_vk->getComputeFamily();
+        barrier.dstQueueFamilyIndex = m_vk->getGraphicsFamily();
+        barrier.buffer = m_generated_data->getCurrentBuffer();
+        barrier.offset = 0;
+        barrier.size = VK_WHOLE_SIZE;
+
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, NULL, 1, &barrier, 0,
+            NULL);
+    }
+
     endCommand();
 }   // renderParticles
 
