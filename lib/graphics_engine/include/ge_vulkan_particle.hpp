@@ -41,10 +41,10 @@ struct GEGPUParticleConfig
     float m_size_increase_factor;
     int m_material_id;
 
+    unsigned m_offset;
     unsigned m_first_execution;
     unsigned m_pre_generating;
     unsigned m_flips;
-    unsigned m_unused;
 };
 
 class GEVulkanDynamicBuffer;

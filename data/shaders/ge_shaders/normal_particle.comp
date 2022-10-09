@@ -17,10 +17,10 @@ layout(std140, push_constant) uniform ParticleConfig
     float m_size_increase_factor;
     int m_material_id;
 
+    uint m_offset;
     uint m_first_execution;
     uint m_pre_generating;
     uint m_flips;
-    uint m_unused;
 } u_config;
 
 layout(std140, binding = 0) readonly buffer InitialParticle
@@ -57,7 +57,7 @@ void main()
     GPUParticleData initial_particle = u_initial_particle.m_data[p_idx];
     for (uint i = 0; i < u_global_config.m_camera_count; i++)
     {
-        uint pos = i * u_config.m_max_count + p_idx;
+        uint pos = i * u_config.m_max_count + p_idx + u_config.m_offset;
         u_rendered_particle.m_data[pos].m_translation = getWorldPosition(
             u_config.m_translation, u_config.m_rotation, u_config.m_scale,
             initial_particle.m_position).xyz;

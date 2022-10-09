@@ -325,26 +325,38 @@ std::unique_lock<std::mutex> GEVulkanParticleManager::getRequiredQueue(
 // ----------------------------------------------------------------------------
 void GEVulkanParticleManager::updateDescriptorSet()
 {
-   /* for (unsigned i = 0; i < 2; i++)
-    std::array<VkDescriptorBufferInfo, 2> buffer_infos;
-    buffer_infos[0].buffer = m_initial_particles->getCurrentBuffer();
-    buffer_infos[0].offset = 0;
-    buffer_infos[0].range = total;
-    buffer_infos[1].buffer = m_particles_generating->getCurrentBuffer();
-    buffer_infos[1].offset = 0;
-    buffer_infos[1].range = total;
+    for (unsigned i = 0; i < m_descriptor_set.size(); i++)
+    {
+        std::array<VkWriteDescriptorSet, 2> write_descriptor_sets = {};
+        VkDescriptorBufferInfo sbo;
+        sbo.buffer = m_generated_data->getLocalBuffer()[i];
+        sbo.offset = 0;
+        sbo.range = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet write_descriptor_set = {};
-    write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write_descriptor_set.dstBinding = 0;
-    write_descriptor_set.dstArrayElement = 0;
-    write_descriptor_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    write_descriptor_set.descriptorCount = buffer_infos.size();
-    write_descriptor_set.pBufferInfo = buffer_infos.data();
-    write_descriptor_set.dstSet = m_descriptor_set;
-    vkUpdateDescriptorSets(vk->getDevice(), 1, &write_descriptor_set, 0,
-        NULL);
-*/
+        VkDescriptorBufferInfo ubo;
+        ubo.buffer = m_ubo->getLocalBuffer()[i];
+        ubo.offset = 0;
+        ubo.range = VK_WHOLE_SIZE;
+
+        write_descriptor_sets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_descriptor_sets[0].dstBinding = 0;
+        write_descriptor_sets[0].dstArrayElement = 0;
+        write_descriptor_sets[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write_descriptor_sets[0].descriptorCount = 1;
+        write_descriptor_sets[0].pBufferInfo = &sbo;
+        write_descriptor_sets[0].dstSet = m_descriptor_set[i];
+
+        write_descriptor_sets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_descriptor_sets[1].dstBinding = 1;
+        write_descriptor_sets[1].dstArrayElement = 0;
+        write_descriptor_sets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        write_descriptor_sets[1].descriptorCount = 1;
+        write_descriptor_sets[1].pBufferInfo = &ubo;
+        write_descriptor_sets[1].dstSet = m_descriptor_set[i];
+
+        vkUpdateDescriptorSets(m_vk->getDevice(), write_descriptor_sets.size(),
+            write_descriptor_sets.data(), 0, NULL);
+    }
 }   // updateDescriptorSet
 
 }
