@@ -181,7 +181,7 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
     VkPushConstantRange push_constant;
     push_constant.offset = 0;
     push_constant.size = sizeof(GEParticleGlobalConfig);
-    push_constant.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
+    push_constant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     pipeline_layout_info.pPushConstantRanges = &push_constant;
     pipeline_layout_info.pushConstantRangeCount = 1;
 
