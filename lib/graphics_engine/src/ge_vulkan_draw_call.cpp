@@ -14,6 +14,8 @@
 #include "ge_vulkan_features.hpp"
 #include "ge_vulkan_mesh_cache.hpp"
 #include "ge_vulkan_mesh_scene_node.hpp"
+#include "ge_vulkan_particle.hpp"
+#include "ge_vulkan_particle_manager.hpp"
 #include "ge_vulkan_shader_manager.hpp"
 #include "ge_vulkan_skybox_renderer.hpp"
 #include "ge_vulkan_texture_descriptor.hpp"
@@ -235,6 +237,8 @@ void GEVulkanDrawCall::generate()
     if (!m_visible_nodes.empty() && m_data_layout == VK_NULL_HANDLE)
         createVulkanData();
 
+    GEVulkanDriver* vk = static_cast<GEVulkanDriver*>(getDriver());
+
     std::vector<std::pair<void*, size_t> > data_uploading;
     std::unordered_map<irr::scene::ISceneNode*, int> skinning_offets;
     int added_joint = 1;
@@ -444,18 +448,25 @@ void GEVulkanDrawCall::generate()
                     material_id = m_texture_descriptor->getTextureID(list);
                 }
                 const core::array<SParticle>& particles = node->getParticles();
-                unsigned ps = particles.size();
+                unsigned ps = getGEConfig()->m_gpu_particle ?
+                     node->getMaxCount() : particles.size();
                 if (ps == 0)
                 {
                     visible_count--;
                     continue;
                 }
                 visible_count += ps - 1;
-                for (unsigned i = 0; i < ps; i++)
+                GEVulkanParticle* p = node->getVulkanParticle();
+                if (p)
                 {
-                    m_visible_objects.emplace_back(particles[i],
-                        material_id, m_billboard_rotation);
+                    p->getConfig().m_material_id = material_id;
+                    vk->getParticleManager()->addRenderingParticle(p);
                 }
+                //for (unsigned i = 0; i < ps; i++)
+                //{
+                //    m_visible_objects.emplace_back(particles[i],
+                //        material_id, m_billboard_rotation);
+                //}
             }
             VkDrawIndexedIndirectCommand cmd;
             cmd.indexCount = p.first->getIndexCount();
@@ -468,8 +479,8 @@ void GEVulkanDrawCall::generate()
                 m_graphics_pipelines[cur_shader].second;
             std::string sorting_key =
                 std::string(1, settings.m_drawing_priority) + cur_shader;
-            m_cmds.push_back({ cmd, cur_shader, sorting_key, p.first,
-                settings.isTransparent() });
+            //m_cmds.push_back({ cmd, cur_shader, sorting_key, p.first,
+            //    settings.isTransparent() });
         }
     }
 
@@ -1107,7 +1118,8 @@ void GEVulkanDrawCall::uploadDynamicData(GEVulkanDriver* vk,
     m_dynamic_data->setCurrentData(data_uploading, cmd);
 
     const bool use_base_vertex = GEVulkanFeatures::supportsBaseVertexRendering();
-    size_t min_size = 0;
+    size_t min_size = m_materials_padded_size + m_skinning_data_padded_size +
+        m_object_data_padded_size;
     if (!use_base_vertex)
     {
         // Make sure dynamic offset won't become invaild

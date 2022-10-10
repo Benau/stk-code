@@ -5,6 +5,8 @@ vec3 rotateVector(vec4 quat, vec3 vec)
 
 vec4 getWorldPosition(vec3 origin, vec4 rotation, vec3 scale, vec3 local_pos)
 {
+    if (dot(scale, scale) == 0.)
+        return vec4(0.);
     local_pos = local_pos * scale;
     local_pos = rotateVector(rotation, local_pos);
     local_pos = local_pos + origin;

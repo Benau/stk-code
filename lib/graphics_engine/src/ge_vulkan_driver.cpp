@@ -11,9 +11,11 @@
 #include "ge_vulkan_command_loader.hpp"
 #include "ge_vulkan_depth_texture.hpp"
 #include "ge_vulkan_draw_call.hpp"
+#include "ge_vulkan_dynamic_buffer.hpp"
 #include "ge_vulkan_fbo_texture.hpp"
 #include "ge_vulkan_features.hpp"
 #include "ge_vulkan_mesh_cache.hpp"
+#include "ge_vulkan_particle_manager.hpp"
 #include "ge_vulkan_scene_manager.hpp"
 #include "ge_vulkan_shader_manager.hpp"
 #include "ge_vulkan_skybox_renderer.hpp"
@@ -504,7 +506,7 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
                 m_depth_texture(NULL), m_mesh_texture_descriptor(NULL),
                 m_rtt_texture(NULL), m_prev_rtt_texture(NULL),
                 m_separate_rtt_texture(NULL), m_rtt_polycount(0),
-                m_billboard_quad(NULL)
+                m_billboard_quad(NULL), m_particle_manager(NULL)
 {
     m_vk.reset(new VK());
     m_physical_device = VK_NULL_HANDLE;
@@ -633,10 +635,14 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
     {
         GEVulkanCommandLoader::init(this);
         createCommandBuffers();
-
         GEVulkanShaderManager::init(this);
         // For GEVulkanDynamicBuffer
         GE::setVideoDriver(this);
+        size_t alignment = m_properties.limits.minStorageBufferOffsetAlignment;
+        if (alignment > sizeof(ObjectData))
+            getGEConfig()->m_gpu_particle = false;
+        if (getGEConfig()->m_gpu_particle)
+            m_particle_manager = new GEVulkanParticleManager(this);
         createUnicolorTextures();
         GEVulkan2dRenderer::init(this);
         GEVulkanSkyBoxRenderer::init();
@@ -690,6 +696,11 @@ void GEVulkanDriver::destroyVulkan()
     {
         getVulkanMeshCache()->removeMesh(m_billboard_quad);
         m_billboard_quad = NULL;
+    }
+    if (m_particle_manager)
+    {
+        delete m_particle_manager;
+        m_particle_manager = NULL;
     }
 
     if (m_irrlicht_device->getSceneManager() &&
@@ -769,7 +780,7 @@ void GEVulkanDriver::createInstance(SDL_Window* window)
     VkInstanceCreateInfo create_info = {};
     std::vector<const char*> enabled_validation_layers;
 
-#ifdef ENABLE_VALIDATION
+#if 0
     g_debug_print = true;
     for (VkLayerProperties& prop : available_layers)
     {
@@ -1696,7 +1707,15 @@ bool GEVulkanDriver::endScene()
     if (g_paused_rendering.load())
     {
         GEVulkan2dRenderer::clear();
+        if (m_particle_manager)
+            m_particle_manager->reset();
         return false;
+    }
+
+    if (m_particle_manager)
+    {
+        m_particle_manager->renderParticles(static_cast<GEVulkanSceneManager*>(
+            m_irrlicht_device->getSceneManager()));
     }
 
     VkFence fence = m_vk->in_flight_fences[m_current_frame];
@@ -1709,6 +1728,11 @@ bool GEVulkanDriver::endScene()
         handleDeletedTextures();
         destroySwapChainRelated(false/*handle_surface*/);
         createSwapChainRelated(false/*handle_surface*/);
+        if (m_particle_manager)
+        {
+            m_particle_manager->reset();
+            m_particle_manager->recreateSemaphore();
+        }
         return true;
     }
 
@@ -1725,20 +1749,43 @@ bool GEVulkanDriver::endScene()
         video::CNullDriver::endScene();
         GEVulkan2dRenderer::clear();
         handleDeletedTextures();
+        if (m_particle_manager)
+        {
+            m_particle_manager->reset();
+            m_particle_manager->recreateSemaphore();
+        }
         return false;
     }
 
     buildCommandBuffers();
 
-    VkSemaphore wait_semaphores[] = {m_vk->image_available_semaphores[m_current_frame]};
-    VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    std::vector<VkSemaphore> wait_semaphores =
+    {
+        m_vk->image_available_semaphores[m_current_frame]
+    };
+    std::vector<VkPipelineStageFlags> wait_stages =
+    {
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+    };
+    if (m_particle_manager)
+    {
+        VkSemaphore particle_sem = m_particle_manager->getSemaphore();
+        if (particle_sem != VK_NULL_HANDLE)
+        {
+            wait_semaphores.push_back(particle_sem);
+            wait_stages.push_back(
+                VK_PIPELINE_STAGE_TRANSFER_BIT |
+                VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+        }
+    }
     VkSemaphore signal_semaphores[] = {m_vk->render_finished_semaphores[m_current_frame]};
 
     VkSubmitInfo submit_info = {};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.waitSemaphoreCount = 1;
-    submit_info.pWaitSemaphores = wait_semaphores;
-    submit_info.pWaitDstStageMask = wait_stages;
+    submit_info.waitSemaphoreCount = wait_semaphores.size();
+    submit_info.pWaitSemaphores = wait_semaphores.data();
+    submit_info.pWaitDstStageMask = wait_stages.data();
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &m_vk->command_buffers[m_current_frame];
     submit_info.signalSemaphoreCount = 1;
@@ -1781,6 +1828,9 @@ bool GEVulkanDriver::endScene()
         result = vkQueuePresentKHR(present_queue, &present_info);
         ul.unlock();
     }
+    if (m_particle_manager)
+        m_particle_manager->reset();
+
     if (!video::CNullDriver::endScene())
         return false;
 
@@ -2383,6 +2433,24 @@ void GEVulkanDriver::buildCommandBuffers()
         &begin_info);
     if (result != VK_SUCCESS)
         return;
+
+    if (m_particle_manager && m_particle_manager->getGeneratedData() &&
+        GEVulkanFeatures::supportsSeparatedComputeQueue())
+    {
+        VkBufferMemoryBarrier barrier = {};
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.srcQueueFamilyIndex = getComputeFamily();
+        barrier.dstQueueFamilyIndex = getGraphicsFamily();
+        barrier.buffer =
+            m_particle_manager->getGeneratedData()->getCurrentBuffer();
+        barrier.offset = 0;
+        barrier.size = VK_WHOLE_SIZE;
+
+        vkCmdPipelineBarrier(getCurrentCommandBuffer(),
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 1, &barrier, 0, NULL);
+    }
 
     GEVulkan2dRenderer::uploadTrisBuffers();
     for (auto& p : static_cast<GEVulkanSceneManager*>(
