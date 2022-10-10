@@ -127,6 +127,8 @@ private:
 
     size_t m_materials_padded_size;
 
+    size_t m_particle_offset;
+
     char* m_data_padding;
 
     VkDescriptorSetLayout m_data_layout;

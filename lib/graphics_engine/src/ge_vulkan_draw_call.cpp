@@ -125,6 +125,7 @@ GEVulkanDrawCall::GEVulkanDrawCall()
     m_object_data_padded_size = 0;
     m_skinning_data_padded_size = 0;
     m_materials_padded_size = 0;
+    m_particle_offset = 0;
     m_data_padding = NULL;
     const size_t ubo_padding = m_limits.minUniformBufferOffsetAlignment;
     const size_t sbo_padding = m_limits.minStorageBufferOffsetAlignment;
@@ -422,6 +423,7 @@ void GEVulkanDrawCall::generate()
         }
     }
 
+    size_t particle_size = 0;
     for (auto& p : m_visible_particles)
     {
         TexturesList textures = getTexturesList(p.first->getMaterial());
@@ -456,17 +458,21 @@ void GEVulkanDrawCall::generate()
                     continue;
                 }
                 visible_count += ps - 1;
-                GEVulkanParticle* p = node->getVulkanParticle();
-                if (p)
+                GEVulkanParticle* vp = node->getVulkanParticle();
+                if (vp)
                 {
-                    p->getConfig().m_material_id = material_id;
-                    vk->getParticleManager()->addRenderingParticle(p);
+                    vp->getConfig().m_material_id = material_id;
+                    vk->getParticleManager()->addRenderingParticle(vp);
+                    particle_size += ps * sizeof(ObjectData);
                 }
-                //for (unsigned i = 0; i < ps; i++)
-                //{
-                //    m_visible_objects.emplace_back(particles[i],
-                //        material_id, m_billboard_rotation);
-                //}
+                else
+                {
+                    for (unsigned i = 0; i < ps; i++)
+                    {
+                        m_visible_objects.emplace_back(particles[i],
+                            material_id, m_billboard_rotation);
+                    }
+                }
             }
             VkDrawIndexedIndirectCommand cmd;
             cmd.indexCount = p.first->getIndexCount();
@@ -479,8 +485,8 @@ void GEVulkanDrawCall::generate()
                 m_graphics_pipelines[cur_shader].second;
             std::string sorting_key =
                 std::string(1, settings.m_drawing_priority) + cur_shader;
-            //m_cmds.push_back({ cmd, cur_shader, sorting_key, p.first,
-            //    settings.isTransparent() });
+            m_cmds.push_back({ cmd, cur_shader, sorting_key, p.first,
+                settings.isTransparent() });
         }
     }
 
@@ -511,7 +517,8 @@ void GEVulkanDrawCall::generate()
             sizeof(ObjectData) * m_visible_objects.size();
         data_uploading.emplace_back((void*)m_visible_objects.data(),
             object_data_size);
-        m_object_data_padded_size = object_data_size;
+        m_particle_offset = object_data_size;
+        m_object_data_padded_size = object_data_size + particle_size;
     }
     else
     {
@@ -1147,6 +1154,38 @@ void GEVulkanDrawCall::uploadDynamicData(GEVulkanDriver* vk,
 
     vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, dst_stage, 0, 0,
         NULL, 1, &barrier, 0, NULL);
+
+    std::vector<VkBufferCopy> regions;
+    for (auto& p : m_visible_particles)
+    {
+        for (auto& q : p.second)
+        {
+            for (irr::scene::IParticleSystemSceneNode* node : q.second)
+            {
+                GEVulkanParticle* vp = node->getVulkanParticle();
+                if (vp)
+                {
+                    VkBufferCopy copy_region;
+                    copy_region.srcOffset =
+                        vp->getConfig().m_offset * sizeof(ObjectData);
+                    copy_region.dstOffset = m_materials_padded_size +
+                        m_skinning_data_padded_size + m_particle_offset;
+                    size_t copy_size = vp->getConfig().m_max_count *
+                        sizeof(ObjectData);
+                    copy_region.size = copy_size;
+                    m_particle_offset += copy_size;
+                    regions.push_back(copy_region);
+                }
+            }
+        }
+    }
+
+    if (!regions.empty())
+    {
+        vkCmdCopyBuffer(cmd, vk->getParticleManager()
+            ->getGeneratedData()->getCurrentBuffer(),
+            m_sbo_data->getCurrentBuffer(), regions.size(), regions.data());
+    }
 
     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
     barrier.buffer = m_sbo_data->getCurrentBuffer();
