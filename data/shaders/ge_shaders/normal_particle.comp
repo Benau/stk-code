@@ -47,7 +47,7 @@ layout(std140, set = 1, binding = 1) uniform GlobalConfig
     uint m_unused_2;
 } u_global_config;
 
-layout (local_size_x = 4) in;
+layout (local_size_x = 256) in;
 
 void main()
 {

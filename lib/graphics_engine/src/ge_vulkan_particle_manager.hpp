@@ -57,6 +57,9 @@ class GEVulkanParticleManager
     GEVulkanDynamicBuffer* m_generated_data;
 
     GESpinLock m_manager_lock, m_semaphore_lock;
+
+    int m_current_frame;
+
     // ------------------------------------------------------------------------
     void updateDescriptorSet();
     // ------------------------------------------------------------------------
@@ -91,7 +94,7 @@ public:
     // ------------------------------------------------------------------------
     void renderParticles(GEVulkanSceneManager* sm);
     // ------------------------------------------------------------------------
-    void reset()                             { m_rendering_particles.clear(); }
+    void finishRendering();
     // ------------------------------------------------------------------------
     std::unique_lock<std::mutex> getRequiredQueue(VkQueue& queue);
     // ------------------------------------------------------------------------
@@ -110,6 +113,8 @@ public:
             { return m_rendering_particles.empty() ? NULL : m_generated_data; }
     // ------------------------------------------------------------------------
     void recreateSemaphore();
+    // ------------------------------------------------------------------------
+    int getCurrentFrame() const                     { return m_current_frame; }
 };   // GEVulkanParticleManager
 
 }

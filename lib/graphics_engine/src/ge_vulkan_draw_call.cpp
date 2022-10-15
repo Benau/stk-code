@@ -1180,10 +1180,11 @@ void GEVulkanDrawCall::uploadDynamicData(GEVulkanDriver* vk,
         }
     }
 
+    GEVulkanParticleManager* pm = vk->getParticleManager();
+    const unsigned frame = pm->getCurrentFrame();
     if (!regions.empty())
     {
-        vkCmdCopyBuffer(cmd, vk->getParticleManager()
-            ->getGeneratedData()->getCurrentBuffer(),
+        vkCmdCopyBuffer(cmd, pm->getGeneratedData()->getLocalBuffer()[frame],
             m_sbo_data->getCurrentBuffer(), regions.size(), regions.data());
     }
 

@@ -1708,7 +1708,7 @@ bool GEVulkanDriver::endScene()
     {
         GEVulkan2dRenderer::clear();
         if (m_particle_manager)
-            m_particle_manager->reset();
+            m_particle_manager->finishRendering();
         return false;
     }
 
@@ -1730,7 +1730,7 @@ bool GEVulkanDriver::endScene()
         createSwapChainRelated(false/*handle_surface*/);
         if (m_particle_manager)
         {
-            m_particle_manager->reset();
+            m_particle_manager->finishRendering();
             m_particle_manager->recreateSemaphore();
         }
         return true;
@@ -1751,7 +1751,7 @@ bool GEVulkanDriver::endScene()
         handleDeletedTextures();
         if (m_particle_manager)
         {
-            m_particle_manager->reset();
+            m_particle_manager->finishRendering();
             m_particle_manager->recreateSemaphore();
         }
         return false;
@@ -1829,7 +1829,7 @@ bool GEVulkanDriver::endScene()
         ul.unlock();
     }
     if (m_particle_manager)
-        m_particle_manager->reset();
+        m_particle_manager->finishRendering();
 
     if (!video::CNullDriver::endScene())
         return false;
@@ -2443,7 +2443,8 @@ void GEVulkanDriver::buildCommandBuffers()
         barrier.srcQueueFamilyIndex = getComputeFamily();
         barrier.dstQueueFamilyIndex = getGraphicsFamily();
         barrier.buffer =
-            m_particle_manager->getGeneratedData()->getCurrentBuffer();
+            m_particle_manager->getGeneratedData()->getLocalBuffer()[
+            m_particle_manager->getCurrentFrame()];
         barrier.offset = 0;
         barrier.size = VK_WHOLE_SIZE;
 

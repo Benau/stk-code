@@ -186,6 +186,7 @@ void GEVulkanFeatures::init(GEVulkanDriver* vk)
     if (!g_supports_base_vertex_rendering)
         g_supports_multi_draw_indirect = false;
 #endif
+
 }   // init
 
 // ----------------------------------------------------------------------------
@@ -270,7 +271,7 @@ bool GEVulkanFeatures::supportsNonUniformIndexing()
 
 // ----------------------------------------------------------------------------
 bool GEVulkanFeatures::supportsDifferentTexturePerDraw()
-{
+{//return false;
     return g_supports_bind_textures_at_once &&
         g_supports_descriptor_indexing && g_supports_non_uniform_indexing;
 }   // supportsDifferentTexturePerDraw
