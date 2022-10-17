@@ -485,8 +485,8 @@ void GEVulkanDrawCall::generate()
                 m_graphics_pipelines[cur_shader].second;
             std::string sorting_key =
                 std::string(1, settings.m_drawing_priority) + cur_shader;
-            m_cmds.push_back({ cmd, cur_shader, sorting_key, p.first,
-                settings.isTransparent() });
+            //m_cmds.push_back({ cmd, cur_shader, sorting_key, p.first,
+            //    settings.isTransparent() });
         }
     }
 
