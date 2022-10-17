@@ -129,22 +129,40 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
             "m_global_set_layout");
     }
 
+    // m_config_set_layout
+    std::vector<VkDescriptorSetLayoutBinding> config_layout_binding;
+    binding.binding = 0;
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+    config_layout_binding.push_back(binding);
+    setinfo.pBindings = config_layout_binding.data();
+    setinfo.bindingCount = config_layout_binding.size();
+    if (vkCreateDescriptorSetLayout(m_vk->getDevice(), &setinfo,
+        NULL, &m_config_set_layout) != VK_SUCCESS)
+    {
+        throw std::runtime_error(
+            "GEVulkanParticleManager: vkCreateDescriptorSetLayout failed for "
+            "m_global_set_layout");
+    }
+
     const unsigned total_frame = GEVulkanDriver::getMaxFrameInFlight() + 1;
     // m_descriptor_pool
-    std::array<VkDescriptorPoolSize, 2> pool_size =
+    std::array<VkDescriptorPoolSize, 3> pool_size =
     {{
         {
             VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, total_frame
         },
         {
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, total_frame
+        },
+        {
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, total_frame
         }
     }};
 
     VkDescriptorPoolCreateInfo descriptor_pool_info = {};
     descriptor_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     descriptor_pool_info.flags = 0;
-    descriptor_pool_info.maxSets = total_frame;
+    descriptor_pool_info.maxSets = total_frame * 2;
     descriptor_pool_info.poolSizeCount = pool_size.size();
     descriptor_pool_info.pPoolSizes = pool_size.data();
     if (vkCreateDescriptorPool(m_vk->getDevice(), &descriptor_pool_info, NULL,
@@ -154,9 +172,9 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
             "GEVulkanParticleManager: vkCreateDescriptorPool failed");
     }
 
-    // m_descriptor_sets
-    m_descriptor_sets.resize(total_frame);
-    std::vector<VkDescriptorSetLayout> layouts(m_descriptor_sets.size(),
+    // m_global_descriptor_sets
+    m_global_descriptor_sets.resize(total_frame);
+    std::vector<VkDescriptorSetLayout> layouts(m_global_descriptor_sets.size(),
         m_global_set_layout);
 
     VkDescriptorSetAllocateInfo set_alloc_info = {};
@@ -166,30 +184,40 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
     set_alloc_info.pSetLayouts = layouts.data();
 
     if (vkAllocateDescriptorSets(m_vk->getDevice(), &set_alloc_info,
-        m_descriptor_sets.data()) != VK_SUCCESS)
+        m_global_descriptor_sets.data()) != VK_SUCCESS)
     {
         throw std::runtime_error(
-            "GEVulkanParticleManager: vkAllocateDescriptorSets failed");
+            "GEVulkanParticleManager: vkAllocateDescriptorSets failed for "
+            "m_global_descriptor_sets");
+    }
+
+    // m_config_descriptor_sets
+    m_config_descriptor_sets.resize(total_frame);
+    layouts = std::vector<VkDescriptorSetLayout>(
+        m_config_descriptor_sets.size(), m_config_set_layout);
+    set_alloc_info.descriptorSetCount = layouts.size();
+    set_alloc_info.pSetLayouts = layouts.data();
+
+    if (vkAllocateDescriptorSets(m_vk->getDevice(), &set_alloc_info,
+        m_config_descriptor_sets.data()) != VK_SUCCESS)
+    {
+        throw std::runtime_error(
+            "GEVulkanParticleManager: vkAllocateDescriptorSets failed "
+            "m_config_descriptor_sets");
     }
 
     // m_pipeline_layout
-    std::array<VkDescriptorSetLayout, 2> all_layouts =
+    std::array<VkDescriptorSetLayout, 3> all_layouts =
     {{
         m_particle_set_layout,
-        m_global_set_layout
+        m_global_set_layout,
+        m_config_set_layout
     }};
 
     VkPipelineLayoutCreateInfo pipeline_layout_info = {};
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipeline_layout_info.setLayoutCount = all_layouts.size();
     pipeline_layout_info.pSetLayouts = all_layouts.data();
-
-    VkPushConstantRange push_constant;
-    push_constant.offset = 0;
-    push_constant.size = sizeof(GEGPUParticleConfig);
-    push_constant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-    pipeline_layout_info.pPushConstantRanges = &push_constant;
-    pipeline_layout_info.pushConstantRangeCount = 1;
 
     result = vkCreatePipelineLayout(m_vk->getDevice(), &pipeline_layout_info,
         NULL, &m_pipeline_layout);
@@ -224,7 +252,16 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         100000, 0, total_frame);
 
-    updateDescriptorSet();
+    m_particle_config = new GEVulkanDynamicBuffer(
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(GEGPUParticleConfig) * 50,
+        total_frame, total_frame);
+
+    size_t particle_config_padding = getPadding(sizeof(GEGPUParticleConfig),
+        m_vk->getPhysicalDeviceProperties().limits
+        .minStorageBufferOffsetAlignment);
+    m_particle_config_padding.resize(particle_config_padding);
+
+    updateDescriptorSets();
     m_global_config = {};
     m_current_frame = 0;
 }   // GEVulkanParticleManager
@@ -235,9 +272,12 @@ GEVulkanParticleManager::~GEVulkanParticleManager()
     GEVulkanCommandLoader::waitIdle();
     delete m_ubo;
     delete m_generated_data;
+    delete m_particle_config;
     vkDestroyPipeline(m_vk->getDevice(), m_pipeline, NULL);
     vkDestroyPipelineLayout(m_vk->getDevice(), m_pipeline_layout, NULL);
     vkDestroyDescriptorPool(m_vk->getDevice(), m_descriptor_pool, NULL);
+    vkDestroyDescriptorSetLayout(m_vk->getDevice(), m_config_set_layout,
+        NULL);
     vkDestroyDescriptorSetLayout(m_vk->getDevice(), m_global_set_layout,
         NULL);
     vkDestroyDescriptorSetLayout(m_vk->getDevice(), m_particle_set_layout,
@@ -327,31 +367,6 @@ void GEVulkanParticleManager::renderParticles(GEVulkanSceneManager* sm)
         required_size += p->getConfig().m_max_count * sizeof(ObjectData);
         p->getConfig().m_offset = offset;
         offset += p->getConfig().m_max_count * m_global_config.m_camera_count;
-    }
-    required_size *= m_global_config.m_camera_count;
-    if (m_generated_data->resizeIfNeeded(required_size))
-        updateDescriptorSet();
-
-    m_semaphore_lock.lock();
-    GEVulkanCommandLoader::addMultiThreadingCommand(
-        std::bind(&GEVulkanParticleManager::renderParticlesInternal, this));
-}   // renderParticles
-
-// ----------------------------------------------------------------------------
-void GEVulkanParticleManager::renderParticlesInternal()
-{
-    VkCommandBuffer cmd = beginCommand();
-    m_ubo->setCurrentData(&m_global_config, sizeof(GEParticleGlobalConfig),
-        cmd, m_current_frame);
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline);
-
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
-        m_pipeline_layout, 1, 1, &m_descriptor_sets[m_current_frame], 0, NULL);
-
-    for (GEVulkanParticle* p : m_rendering_particles)
-    {
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
-            m_pipeline_layout, 0, 1, p->getDescriptorSet(), 0, NULL);
         const irr::core::matrix4& model_mat =
             p->getNode()->getAbsoluteTransformation();
         memcpy(&p->getConfig().m_translation.X, &model_mat[12],
@@ -378,11 +393,66 @@ void GEVulkanParticleManager::renderParticlesInternal()
             sizeof(irr::core::quaternion));
         memcpy(&p->getConfig().m_scale.X, &scale,
             sizeof(irr::core::vector3df));
-        vkCmdPushConstants(cmd, m_pipeline_layout,
-            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GEGPUParticleConfig),
-            &p->getConfig());
-        vkCmdDispatch(cmd, (p->getConfig().m_max_count / 256) + 1, 1, 1);
+        m_rendering_configs.push_back(p->getConfig());
         p->getConfig().m_first_execution = 0;
+    }
+    required_size *= m_global_config.m_camera_count;
+
+    size_t particle_config_size = m_rendering_configs.size() * (
+        sizeof(GEGPUParticleConfig) + m_particle_config_padding.size());
+    if (m_generated_data->resizeIfNeeded(required_size) ||
+        m_particle_config->resizeIfNeeded(particle_config_size))
+        updateDescriptorSets();
+
+    m_semaphore_lock.lock();
+    GEVulkanCommandLoader::addMultiThreadingCommand(
+        std::bind(&GEVulkanParticleManager::renderParticlesInternal, this));
+}   // renderParticles
+
+// ----------------------------------------------------------------------------
+void GEVulkanParticleManager::renderParticlesInternal()
+{
+    VkCommandBuffer cmd = beginCommand();
+    m_ubo->setCurrentData(&m_global_config, sizeof(GEParticleGlobalConfig),
+        cmd, m_current_frame);
+
+    if (m_particle_config_padding.empty())
+    {
+        m_particle_config->setCurrentData(m_rendering_configs.data(),
+            m_rendering_configs.size() * sizeof(GEGPUParticleConfig),
+            cmd, m_current_frame);
+    }
+    else
+    {
+        std::vector<std::pair<void*, size_t> > data_uploading;
+        for (GEGPUParticleConfig& config : m_rendering_configs)
+        {
+            data_uploading.emplace_back(&config, sizeof(GEGPUParticleConfig));
+            data_uploading.emplace_back(m_particle_config_padding.data(),
+                m_particle_config_padding.size());
+        }
+        m_particle_config->setCurrentData(data_uploading, cmd,
+            m_current_frame);
+    }
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_pipeline);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+        m_pipeline_layout, 1, 1, &m_global_descriptor_sets[m_current_frame], 0,
+        NULL);
+
+    uint32_t dynamic_offset = 0;
+    unsigned idx = 0;
+    for (GEVulkanParticle* p : m_rendering_particles)
+    {
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+            m_pipeline_layout, 0, 1, p->getDescriptorSet(), 0, NULL);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+            m_pipeline_layout, 2, 1,
+            &m_config_descriptor_sets[m_current_frame], 1, &dynamic_offset);
+        vkCmdDispatch(cmd, (m_rendering_configs[idx++].m_max_count / 256) + 1,
+            1, 1);
+        dynamic_offset += sizeof(GEGPUParticleConfig) +
+            m_particle_config_padding.size();
     }
 
     if (GEVulkanFeatures::supportsSeparatedComputeQueue())
@@ -416,9 +486,9 @@ std::unique_lock<std::mutex> GEVulkanParticleManager::getRequiredQueue(
 }   // getRequiredQueue
 
 // ----------------------------------------------------------------------------
-void GEVulkanParticleManager::updateDescriptorSet()
+void GEVulkanParticleManager::updateDescriptorSets()
 {
-    for (unsigned i = 0; i < m_descriptor_sets.size(); i++)
+    for (unsigned i = 0; i < m_global_descriptor_sets.size(); i++)
     {
         std::array<VkWriteDescriptorSet, 2> write_descriptor_sets = {};
         VkDescriptorBufferInfo sbo;
@@ -437,7 +507,7 @@ void GEVulkanParticleManager::updateDescriptorSet()
         write_descriptor_sets[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         write_descriptor_sets[0].descriptorCount = 1;
         write_descriptor_sets[0].pBufferInfo = &sbo;
-        write_descriptor_sets[0].dstSet = m_descriptor_sets[i];
+        write_descriptor_sets[0].dstSet = m_global_descriptor_sets[i];
 
         write_descriptor_sets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write_descriptor_sets[1].dstBinding = 1;
@@ -445,12 +515,33 @@ void GEVulkanParticleManager::updateDescriptorSet()
         write_descriptor_sets[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         write_descriptor_sets[1].descriptorCount = 1;
         write_descriptor_sets[1].pBufferInfo = &ubo;
-        write_descriptor_sets[1].dstSet = m_descriptor_sets[i];
+        write_descriptor_sets[1].dstSet = m_global_descriptor_sets[i];
 
         vkUpdateDescriptorSets(m_vk->getDevice(), write_descriptor_sets.size(),
             write_descriptor_sets.data(), 0, NULL);
     }
-}   // updateDescriptorSet
+
+    for (unsigned i = 0; i < m_config_descriptor_sets.size(); i++)
+    {
+        VkWriteDescriptorSet write_descriptor_set = {};
+        VkDescriptorBufferInfo sbo;
+        sbo.buffer = m_particle_config->getLocalBuffer()[i];
+        sbo.offset = 0;
+        sbo.range = sizeof(GEGPUParticleConfig);
+
+        write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_descriptor_set.dstBinding = 0;
+        write_descriptor_set.dstArrayElement = 0;
+        write_descriptor_set.descriptorType =
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+        write_descriptor_set.descriptorCount = 1;
+        write_descriptor_set.pBufferInfo = &sbo;
+        write_descriptor_set.dstSet = m_config_descriptor_sets[i];
+
+        vkUpdateDescriptorSets(m_vk->getDevice(), 1, &write_descriptor_set, 0,
+            NULL);
+    }
+}   // updateDescriptorSets
 
 // ----------------------------------------------------------------------------
 void GEVulkanParticleManager::finishRendering()
@@ -458,6 +549,7 @@ void GEVulkanParticleManager::finishRendering()
     if (!m_rendering_particles.empty())
     {
         m_rendering_particles.clear();
+        m_rendering_configs.clear();
         m_current_frame = (m_current_frame + 1) %
             GEVulkanDriver::getMaxFrameInFlight() + 1;
     }

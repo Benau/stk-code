@@ -2,7 +2,7 @@
 #include "utils/object_data.h"
 #include "../utils/get_world_location.vert"
 
-layout(std140, push_constant) uniform ParticleConfig
+struct ParticleConfig
 {
     vec3 m_translation;
     uint m_max_count;
@@ -21,7 +21,7 @@ layout(std140, push_constant) uniform ParticleConfig
     uint m_first_execution;
     uint m_flips;
     uint m_pre_generating;
-} u_config;
+};
 
 layout(std140, binding = 0) readonly buffer InitialParticle
 {
@@ -47,20 +47,28 @@ layout(std140, set = 1, binding = 1) uniform GlobalConfig
     uint m_unused_2;
 } u_global_config;
 
+layout(std140, set = 2, binding = 0) buffer CurrentParticleConfig
+{
+    ParticleConfig m_data;
+} u_particle_config;
+
 layout (local_size_x = 256) in;
 
 void main()
 {
     uint p_idx = gl_GlobalInvocationID.x;
-    if (p_idx >= u_config.m_max_count)
+    if (p_idx >= u_particle_config.m_data.m_max_count)
         return;
 
     GPUParticleData initial_particle = u_initial_particle.m_data[p_idx];
     for (uint i = 0; i < u_global_config.m_camera_count; i++)
     {
-        uint pos = i * u_config.m_max_count + p_idx + u_config.m_offset;
+        uint pos = i * u_particle_config.m_data.m_max_count + p_idx +
+            u_particle_config.m_data.m_offset;
         u_rendered_particle.m_data[pos].m_translation = getWorldPosition(
-            u_config.m_translation, u_config.m_rotation, u_config.m_scale,
+            u_particle_config.m_data.m_translation,
+            u_particle_config.m_data.m_rotation,
+            u_particle_config.m_data.m_scale,
             initial_particle.m_position).xyz;
         u_rendered_particle.m_data[pos].m_rotation =
             u_global_config.m_camera_rotation[i];
@@ -68,7 +76,8 @@ void main()
         u_rendered_particle.m_data[pos].m_scale.y = initial_particle.m_size / 2.;
         u_rendered_particle.m_data[pos].m_scale.z = 0;
         u_rendered_particle.m_data[pos].m_skinning_offest = 0;
-        u_rendered_particle.m_data[pos].m_material_id = u_config.m_material_id;
+        u_rendered_particle.m_data[pos].m_material_id =
+            u_particle_config.m_data.m_material_id;
         u_rendered_particle.m_data[pos].m_texture_trans.x = 0.;
         u_rendered_particle.m_data[pos].m_texture_trans.y = 0.;
         u_rendered_particle.m_data[pos].m_hue_change = 0.;

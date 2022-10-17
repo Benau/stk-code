@@ -24,6 +24,8 @@ struct GEParticleGlobalConfig
     unsigned m_unused_2;
 };
 
+struct GEGPUParticleConfig;
+
 class GEVulkanDriver;
 class GEVulkanDynamicBuffer;
 class GEVulkanSceneManager;
@@ -36,6 +38,10 @@ class GEVulkanParticleManager
 
     std::set<GEVulkanParticle*> m_rendering_particles;
 
+    std::vector<GEGPUParticleConfig> m_rendering_configs;
+
+    std::vector<uint8_t> m_particle_config_padding;
+
     VkCommandPool m_command_pool;
     VkFence m_command_fence;
     VkCommandBuffer m_command_buffer;
@@ -45,9 +51,11 @@ class GEVulkanParticleManager
 
     GEParticleGlobalConfig m_global_config;
 
-    VkDescriptorSetLayout m_particle_set_layout, m_global_set_layout;
+    VkDescriptorSetLayout m_particle_set_layout, m_global_set_layout,
+        m_config_set_layout;
     VkDescriptorPool m_descriptor_pool;
-    std::vector<VkDescriptorSet> m_descriptor_sets;
+    std::vector<VkDescriptorSet> m_global_descriptor_sets,
+        m_config_descriptor_sets;
 
     VkPipelineLayout m_pipeline_layout;
     VkPipeline m_pipeline;
@@ -56,12 +64,14 @@ class GEVulkanParticleManager
 
     GEVulkanDynamicBuffer* m_generated_data;
 
+    GEVulkanDynamicBuffer* m_particle_config;
+
     GESpinLock m_manager_lock, m_semaphore_lock;
 
     int m_current_frame;
 
     // ------------------------------------------------------------------------
-    void updateDescriptorSet();
+    void updateDescriptorSets();
     // ------------------------------------------------------------------------
     void renderParticlesInternal();
 public:
