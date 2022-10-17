@@ -780,7 +780,7 @@ void GEVulkanDriver::createInstance(SDL_Window* window)
     VkInstanceCreateInfo create_info = {};
     std::vector<const char*> enabled_validation_layers;
 
-#if 1
+#ifdef ENABLE_VALIDATION
     g_debug_print = true;
     for (VkLayerProperties& prop : available_layers)
     {
