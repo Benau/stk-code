@@ -400,8 +400,11 @@ void GEVulkanParticleManager::renderParticles(GEVulkanSceneManager* sm)
 
     size_t particle_config_size = m_rendering_configs.size() * (
         sizeof(GEGPUParticleConfig) + m_particle_config_padding.size());
-    if (m_generated_data->resizeIfNeeded(required_size) ||
-        m_particle_config->resizeIfNeeded(particle_config_size))
+    bool generated_data_resized =
+        m_generated_data->resizeIfNeeded(required_size);
+    bool particle_data_resized =
+        m_particle_config->resizeIfNeeded(particle_config_size);
+    if (generated_data_resized || particle_data_resized)
         updateDescriptorSets();
 
     m_semaphore_lock.lock();
