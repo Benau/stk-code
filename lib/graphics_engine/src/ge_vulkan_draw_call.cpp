@@ -14,6 +14,8 @@
 #include "ge_vulkan_features.hpp"
 #include "ge_vulkan_mesh_cache.hpp"
 #include "ge_vulkan_mesh_scene_node.hpp"
+#include "ge_vulkan_particle.hpp"
+#include "ge_vulkan_particle_manager.hpp"
 #include "ge_vulkan_shader_manager.hpp"
 #include "ge_vulkan_skybox_renderer.hpp"
 #include "ge_vulkan_texture_descriptor.hpp"
@@ -123,6 +125,7 @@ GEVulkanDrawCall::GEVulkanDrawCall()
     m_object_data_padded_size = 0;
     m_skinning_data_padded_size = 0;
     m_materials_padded_size = 0;
+    m_particle_offset = 0;
     m_data_padding = NULL;
     const size_t ubo_padding = m_limits.minUniformBufferOffsetAlignment;
     const size_t sbo_padding = m_limits.minStorageBufferOffsetAlignment;
@@ -234,6 +237,8 @@ void GEVulkanDrawCall::generate()
 {
     if (!m_visible_nodes.empty() && m_data_layout == VK_NULL_HANDLE)
         createVulkanData();
+
+    GEVulkanDriver* vk = static_cast<GEVulkanDriver*>(getDriver());
 
     std::vector<std::pair<void*, size_t> > data_uploading;
     std::unordered_map<irr::scene::ISceneNode*, int> skinning_offets;
@@ -419,6 +424,7 @@ void GEVulkanDrawCall::generate()
         }
     }
 
+    size_t particle_size = 0;
     for (auto& p : m_visible_particles)
     {
         TexturesList textures = getTexturesList(p.first->getMaterial());
@@ -445,17 +451,28 @@ void GEVulkanDrawCall::generate()
                     material_id = m_texture_descriptor->getTextureID(list);
                 }
                 const core::array<SParticle>& particles = node->getParticles();
-                unsigned ps = particles.size();
+                unsigned ps = getGEConfig()->m_gpu_particle ?
+                     node->getMaxCount() : particles.size();
                 if (ps == 0)
                 {
                     visible_count--;
                     continue;
                 }
                 visible_count += ps - 1;
-                for (unsigned i = 0; i < ps; i++)
+                GEVulkanParticle* vp = node->getVulkanParticle();
+                if (vp)
                 {
-                    m_visible_objects.emplace_back(particles[i],
-                        material_id, m_billboard_rotation);
+                    vp->getConfig().m_material_id = material_id;
+                    vk->getParticleManager()->addRenderingParticle(vp);
+                    particle_size += ps * sizeof(ObjectData);
+                }
+                else
+                {
+                    for (unsigned i = 0; i < ps; i++)
+                    {
+                        m_visible_objects.emplace_back(particles[i],
+                            material_id, m_billboard_rotation);
+                    }
                 }
             }
             VkDrawIndexedIndirectCommand cmd;
@@ -480,11 +497,12 @@ void GEVulkanDrawCall::generate()
             sizeof(ObjectData) * m_visible_objects.size();
         data_uploading.emplace_back((void*)m_visible_objects.data(),
             object_data_size);
-        m_object_data_padded_size = object_data_size;
+        m_particle_offset = object_data_size;
+        m_object_data_padded_size = object_data_size + particle_size;
     }
     else
     {
-        m_object_data_padded_size = 0;
+        m_object_data_padded_size = m_particle_offset = 0;
         std::unordered_map<uint32_t, size_t> offset_map;
         for (unsigned i = 0; i < m_cmds.size(); i++)
         {
@@ -494,15 +512,22 @@ void GEVulkanDrawCall::generate()
             {
                 size_t instance_size =
                     cmd.m_cmd.instanceCount * sizeof(ObjectData);
-                data_uploading.emplace_back(
-                    &m_visible_objects[first_instance], instance_size);
-                size_t cur_padding = getPadding(m_object_data_padded_size +
-                    instance_size, sbo_alignment);
-                if (cur_padding > 0)
+                if (m_visible_objects.size() > first_instance)
                 {
-                    instance_size += cur_padding;
-                    data_uploading.emplace_back((void*)m_data_padding,
-                        cur_padding);
+                    data_uploading.emplace_back(
+                        &m_visible_objects[first_instance], instance_size);
+                    size_t cur_padding = getPadding(m_object_data_padded_size +
+                        instance_size, sbo_alignment);
+                    if (cur_padding > 0)
+                    {
+                        instance_size += cur_padding;
+                        data_uploading.emplace_back((void*)m_data_padding,
+                            cur_padding);
+                    }
+                }
+                else if (m_particle_offset == 0)
+                {
+                    m_particle_offset = m_object_data_padded_size;
                 }
                 cmd.m_dynamic_offset = m_object_data_padded_size;
                 offset_map[cmd.m_cmd.firstInstance] = m_object_data_padded_size;
@@ -1108,7 +1133,8 @@ void GEVulkanDrawCall::uploadDynamicData(GEVulkanDriver* vk,
     m_dynamic_data->setCurrentData(data_uploading, cmd);
 
     const bool use_base_vertex = GEVulkanFeatures::supportsBaseVertexRendering();
-    size_t min_size = 0;
+    size_t min_size = m_materials_padded_size + m_skinning_data_padded_size +
+        m_object_data_padded_size;
     if (!use_base_vertex)
     {
         // Make sure dynamic offset won't become invaild
@@ -1122,6 +1148,38 @@ void GEVulkanDrawCall::uploadDynamicData(GEVulkanDriver* vk,
     }
     m_sbo_data->resizeIfNeeded(min_size);
     m_sbo_data->setCurrentData(m_data_uploading, cmd);
+
+    std::vector<VkBufferCopy> regions;
+    for (auto& p : m_visible_particles)
+    {
+        for (auto& q : p.second)
+        {
+            for (irr::scene::IParticleSystemSceneNode* node : q.second)
+            {
+                GEVulkanParticle* vp = node->getVulkanParticle();
+                if (vp)
+                {
+                    VkBufferCopy copy_region;
+                    copy_region.srcOffset =
+                        vp->getConfig().m_offset * sizeof(ObjectData);
+                    copy_region.dstOffset = m_materials_padded_size +
+                        m_skinning_data_padded_size + m_particle_offset;
+                    size_t copy_size = vp->getConfig().m_max_count *
+                        sizeof(ObjectData);
+                    copy_region.size = copy_size;
+                    m_particle_offset += copy_size;
+                    regions.push_back(copy_region);
+                }
+            }
+        }
+    }
+    GEVulkanParticleManager* pm = vk->getParticleManager();
+    const unsigned frame = pm->getCurrentFrame();
+    if (!regions.empty())
+    {
+        vkCmdCopyBuffer(cmd, pm->getGeneratedData()->getLocalBuffer()[frame],
+            m_sbo_data->getCurrentBuffer(), regions.size(), regions.data());
+    }
 
     VkMemoryBarrier barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;

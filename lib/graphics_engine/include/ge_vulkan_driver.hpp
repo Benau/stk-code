@@ -28,6 +28,7 @@ namespace GE
     class GEVulkanDrawCall;
     class GEVulkanFBOTexture;
     class GEVulkanMeshCache;
+    class GEVulkanParticleManager;
     class GEVulkanTextureDescriptor;
     enum GEVulkanSampler : unsigned
     {
@@ -372,6 +373,8 @@ namespace GE
         void addDrawCallToCache(std::unique_ptr<GEVulkanDrawCall>& dc);
         std::unique_ptr<GEVulkanDrawCall> getDrawCallFromCache();
         GESPM* getBillboardQuad() const             { return m_billboard_quad; }
+        GEVulkanParticleManager* getParticleManager() const
+                                                  { return m_particle_manager; }
     private:
         struct SwapChainSupportDetails
         {
@@ -520,6 +523,7 @@ namespace GE
 
         std::vector<std::unique_ptr<GEVulkanDrawCall> > m_draw_calls_cache;
         GESPM* m_billboard_quad;
+        GEVulkanParticleManager* m_particle_manager;
 
         void createInstance(SDL_Window* window);
         void findPhysicalDevice();

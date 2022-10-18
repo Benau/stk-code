@@ -113,6 +113,7 @@ void GEVulkanShaderManager::init(GEVulkanDriver* vk)
     std::ostringstream oss;
     oss << "#version 450\n";
     oss << "#define SAMPLER_SIZE " << g_sampler_size << "\n";
+    oss << "#define MAX_CAMERA_SIZE " << getMaxCameraCount() << "\n";
     oss << "#define TOTAL_MESH_TEXTURE_LAYER " << g_mesh_texture_layer << "\n";
     if (GEVulkanFeatures::supportsBindTexturesAtOnce())
         oss << "#define BIND_TEXTURES_AT_ONCE\n";

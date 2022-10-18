@@ -19,6 +19,11 @@
 #include "irrArray.h"
 #include "dimension2d.h"
 
+namespace GE
+{
+	class GEVulkanParticle;
+}
+
 namespace irr
 {
 namespace scene
@@ -505,6 +510,9 @@ public:
 		const core::vector3df& pivotPoint = core::vector3df(0.0f,0.0f,0.0f) ) = 0;
 
 	virtual core::array<SParticle>& getParticles() = 0;
+	virtual unsigned getMaxCount() const { return 0; }
+	virtual unsigned getActiveCount() const { return 0; }
+	virtual GE::GEVulkanParticle* getVulkanParticle() const { return NULL; }
 };
 
 } // end namespace scene
