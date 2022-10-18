@@ -155,14 +155,14 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, total_frame
         },
         {
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, total_frame
+            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1
         }
     }};
 
     VkDescriptorPoolCreateInfo descriptor_pool_info = {};
     descriptor_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     descriptor_pool_info.flags = 0;
-    descriptor_pool_info.maxSets = total_frame * 2;
+    descriptor_pool_info.maxSets = total_frame + 1;
     descriptor_pool_info.poolSizeCount = pool_size.size();
     descriptor_pool_info.pPoolSizes = pool_size.data();
     if (vkCreateDescriptorPool(m_vk->getDevice(), &descriptor_pool_info, NULL,
@@ -191,19 +191,17 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
             "m_global_descriptor_sets");
     }
 
-    // m_config_descriptor_sets
-    m_config_descriptor_sets.resize(total_frame);
-    layouts = std::vector<VkDescriptorSetLayout>(
-        m_config_descriptor_sets.size(), m_config_set_layout);
+    // m_config_descriptor_set
+    layouts = std::vector<VkDescriptorSetLayout>(1, m_config_set_layout);
     set_alloc_info.descriptorSetCount = layouts.size();
     set_alloc_info.pSetLayouts = layouts.data();
 
     if (vkAllocateDescriptorSets(m_vk->getDevice(), &set_alloc_info,
-        m_config_descriptor_sets.data()) != VK_SUCCESS)
+        &m_config_descriptor_set) != VK_SUCCESS)
     {
         throw std::runtime_error(
             "GEVulkanParticleManager: vkAllocateDescriptorSets failed "
-            "m_config_descriptor_sets");
+            "m_config_descriptor_set");
     }
 
     // m_pipeline_layout
@@ -246,7 +244,7 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
     }
 
     m_ubo = new GEVulkanDynamicBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        sizeof(GEParticleGlobalConfig), total_frame, total_frame);
+        sizeof(GEParticleGlobalConfig), 1, 1);
 
     m_generated_data = new GEVulkanDynamicBuffer(
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -254,7 +252,7 @@ GEVulkanParticleManager::GEVulkanParticleManager(GEVulkanDriver* vk)
 
     m_particle_config = new GEVulkanDynamicBuffer(
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(GEGPUParticleConfig) * 50,
-        total_frame, total_frame);
+        1, 1);
 
     size_t particle_config_padding = getPadding(sizeof(GEGPUParticleConfig),
         m_vk->getPhysicalDeviceProperties().limits
@@ -417,13 +415,12 @@ void GEVulkanParticleManager::renderParticlesInternal()
 {
     VkCommandBuffer cmd = beginCommand();
     m_ubo->setCurrentData(&m_global_config, sizeof(GEParticleGlobalConfig),
-        cmd, m_current_frame);
+        cmd, 0);
 
     if (m_particle_config_padding.empty())
     {
         m_particle_config->setCurrentData(m_rendering_configs.data(),
-            m_rendering_configs.size() * sizeof(GEGPUParticleConfig),
-            cmd, m_current_frame);
+            m_rendering_configs.size() * sizeof(GEGPUParticleConfig), cmd, 0);
     }
     else
     {
@@ -434,8 +431,7 @@ void GEVulkanParticleManager::renderParticlesInternal()
             data_uploading.emplace_back(m_particle_config_padding.data(),
                 m_particle_config_padding.size());
         }
-        m_particle_config->setCurrentData(data_uploading, cmd,
-            m_current_frame);
+        m_particle_config->setCurrentData(data_uploading, cmd, 0);
     }
 
     VkMemoryBarrier barrier = {};
@@ -458,8 +454,8 @@ void GEVulkanParticleManager::renderParticlesInternal()
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
             m_pipeline_layout, 0, 1, p->getDescriptorSet(), 0, NULL);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
-            m_pipeline_layout, 2, 1,
-            &m_config_descriptor_sets[m_current_frame], 1, &dynamic_offset);
+            m_pipeline_layout, 2, 1, &m_config_descriptor_set, 1,
+            &dynamic_offset);
         vkCmdDispatch(cmd, (m_rendering_configs[idx++].m_max_count / 256) + 1,
             1, 1);
         dynamic_offset += sizeof(GEGPUParticleConfig) +
@@ -508,7 +504,7 @@ void GEVulkanParticleManager::updateDescriptorSets()
         sbo.range = VK_WHOLE_SIZE;
 
         VkDescriptorBufferInfo ubo;
-        ubo.buffer = m_ubo->getLocalBuffer()[i];
+        ubo.buffer = m_ubo->getLocalBuffer()[0];
         ubo.offset = 0;
         ubo.range = sizeof(GEParticleGlobalConfig);
 
@@ -532,26 +528,23 @@ void GEVulkanParticleManager::updateDescriptorSets()
             write_descriptor_sets.data(), 0, NULL);
     }
 
-    for (unsigned i = 0; i < m_config_descriptor_sets.size(); i++)
-    {
-        VkWriteDescriptorSet write_descriptor_set = {};
-        VkDescriptorBufferInfo sbo;
-        sbo.buffer = m_particle_config->getLocalBuffer()[i];
-        sbo.offset = 0;
-        sbo.range = sizeof(GEGPUParticleConfig);
+    VkWriteDescriptorSet write_descriptor_set = {};
+    VkDescriptorBufferInfo sbo;
+    sbo.buffer = m_particle_config->getLocalBuffer()[0];
+    sbo.offset = 0;
+    sbo.range = sizeof(GEGPUParticleConfig);
 
-        write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write_descriptor_set.dstBinding = 0;
-        write_descriptor_set.dstArrayElement = 0;
-        write_descriptor_set.descriptorType =
-            VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
-        write_descriptor_set.descriptorCount = 1;
-        write_descriptor_set.pBufferInfo = &sbo;
-        write_descriptor_set.dstSet = m_config_descriptor_sets[i];
+    write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write_descriptor_set.dstBinding = 0;
+    write_descriptor_set.dstArrayElement = 0;
+    write_descriptor_set.descriptorType =
+        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+    write_descriptor_set.descriptorCount = 1;
+    write_descriptor_set.pBufferInfo = &sbo;
+    write_descriptor_set.dstSet = m_config_descriptor_set;
 
-        vkUpdateDescriptorSets(m_vk->getDevice(), 1, &write_descriptor_set, 0,
-            NULL);
-    }
+    vkUpdateDescriptorSets(m_vk->getDevice(), 1, &write_descriptor_set, 0,
+        NULL);
 }   // updateDescriptorSets
 
 // ----------------------------------------------------------------------------

@@ -781,7 +781,7 @@ void GEVulkanDriver::createInstance(SDL_Window* window)
     VkInstanceCreateInfo create_info = {};
     std::vector<const char*> enabled_validation_layers;
 
-#ifdef ENABLE_VALIDATION
+#if 0
     g_debug_print = true;
     for (VkLayerProperties& prop : available_layers)
     {
@@ -979,7 +979,7 @@ bool GEVulkanDriver::findQueueFamilies(VkPhysicalDevice device,
             queue_families[i].queueFlags & VK_QUEUE_COMPUTE_BIT &&
             queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT)
         {
-            *compute_family = i;
+            //*compute_family = i;
             break;
         }
     }
@@ -1637,7 +1637,10 @@ bool GEVulkanDriver::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
     buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     buffer_info.size = size;
     buffer_info.usage = usage;
-    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    //buffer_info.sharingMode = VK_SHARING_MODE_CONCURRENT;
+    //uint32_t queueFamilyIndices[] = { m_graphics_family, m_compute_family };
+    //buffer_info.queueFamilyIndexCount = 2;
+    //buffer_info.pQueueFamilyIndices = queueFamilyIndices;
 
     return vmaCreateBuffer(m_vk->allocator,
         &buffer_info, &alloc_create_info, &buffer, &buffer_allocation, NULL) ==

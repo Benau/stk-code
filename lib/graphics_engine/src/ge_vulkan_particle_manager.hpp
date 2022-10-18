@@ -55,8 +55,9 @@ class GEVulkanParticleManager
     VkDescriptorSetLayout m_particle_set_layout, m_global_set_layout,
         m_config_set_layout;
     VkDescriptorPool m_descriptor_pool;
-    std::vector<VkDescriptorSet> m_global_descriptor_sets,
-        m_config_descriptor_sets;
+    std::vector<VkDescriptorSet> m_global_descriptor_sets;
+
+    VkDescriptorSet m_config_descriptor_set;
 
     VkPipelineLayout m_pipeline_layout;
     VkPipeline m_pipeline;
