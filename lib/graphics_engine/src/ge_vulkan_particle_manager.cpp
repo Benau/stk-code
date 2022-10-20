@@ -474,7 +474,7 @@ void GEVulkanParticleManager::renderParticlesInternal()
         barrier.size = VK_WHOLE_SIZE;
 
         vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, NULL, 1, &barrier, 0,
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, NULL, 1, &barrier, 0,
             NULL);
     }
 

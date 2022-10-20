@@ -979,7 +979,7 @@ bool GEVulkanDriver::findQueueFamilies(VkPhysicalDevice device,
             queue_families[i].queueFlags & VK_QUEUE_COMPUTE_BIT &&
             queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT)
         {
-            //*compute_family = i;
+            *compute_family = i;
             break;
         }
     }
@@ -2450,7 +2450,7 @@ void GEVulkanDriver::buildCommandBuffers()
         barrier.size = VK_WHOLE_SIZE;
 
         vkCmdPipelineBarrier(getCurrentCommandBuffer(),
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
             VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 1, &barrier, 0, NULL);
     }
 
