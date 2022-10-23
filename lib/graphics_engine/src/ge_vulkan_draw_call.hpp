@@ -220,13 +220,11 @@ public:
     {
         m_visible_nodes.clear();
         m_mb_map.clear();
-        m_cmds.clear();
         m_visible_objects.clear();
         m_materials.clear();
         m_skinning_nodes.clear();
         m_data_uploading.clear();
         m_sbo_data_offset.clear();
-        m_materials_data.clear();
         m_bone_count = 0;
     }
 };   // GEVulkanDrawCall

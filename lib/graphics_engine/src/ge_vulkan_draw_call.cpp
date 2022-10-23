@@ -29,7 +29,7 @@ namespace GE
 {
 // ============================================================================
 void ObjectData::init(irr::scene::ISceneNode* node, int material_id,
-                       int skinning_offset, int irrlicht_material_id)
+                      int skinning_offset, int irrlicht_material_id)
 {
     using namespace MiniGLM;
     const irr::core::matrix4& model_mat = node->getAbsoluteTransformation();
@@ -67,11 +67,11 @@ void ObjectData::init(irr::scene::ISceneNode* node, int material_id,
     else
         m_hue_change = 0.0f;
     m_custom_vertex_color = irr::video::SColor((uint32_t)-1);
-}   // ObjectData
+}   // init
 
 // ============================================================================
 void ObjectData::init(irr::scene::IBillboardSceneNode* node, int material_id,
-                       const irr::core::quaternion& rotation)
+                      const irr::core::quaternion& rotation)
 {
     const irr::core::matrix4& model_mat = node->getAbsoluteTransformation();
     irr::core::vector2df billboard_size = node->getSize();
@@ -94,11 +94,11 @@ void ObjectData::init(irr::scene::IBillboardSceneNode* node, int material_id,
     output.setGreen((top.getGreen() + bottom.getGreen()) / 2);
     output.setBlue((top.getBlue() + bottom.getBlue()) / 2);
     m_custom_vertex_color = output;
-}   // ObjectData
+}   // init
 
 // ============================================================================
 void ObjectData::init(const irr::scene::SParticle& particle, int material_id,
-                       const irr::core::quaternion& rotation)
+                      const irr::core::quaternion& rotation)
 {
     using namespace MiniGLM;
     memcpy(&m_translation_x, &particle.pos, sizeof(float) * 3);
@@ -112,7 +112,7 @@ void ObjectData::init(const irr::scene::SParticle& particle, int material_id,
     m_texture_trans[1] = 0.0f;
     m_hue_change = 0.0f;
     m_custom_vertex_color = particle.color;
-}   // ObjectData
+}   // init
 
 // ----------------------------------------------------------------------------
 GEVulkanDrawCall::GEVulkanDrawCall()
@@ -236,6 +236,10 @@ void GEVulkanDrawCall::generate()
     size_t min_size = 0;
     size_t written_size = 0;
 start:
+    m_cmds.clear();
+    m_materials.clear();
+    m_materials_data.clear();
+
     m_sbo_data->resizeIfNeeded(min_size);
     written_size = 0;
     uint8_t* mapped_addr = (uint8_t*)m_sbo_data->getMappedAddr()
@@ -586,8 +590,8 @@ start:
                         min_size = (written_size + cur_padding) * 2;
                         goto start;
                     }
-                    written_size += padding;
-                    mapped_addr += padding;
+                    written_size += cur_padding;
+                    mapped_addr += cur_padding;
                     material_size += cur_padding;
                 }
                 material.first = m_materials_padded_size;
@@ -616,8 +620,8 @@ start:
                 min_size = (written_size + cur_padding) * 2;
                 goto start;
             }
-            written_size += padding;
-            mapped_addr += padding;
+            written_size += cur_padding;
+            mapped_addr += cur_padding;
             material_size += cur_padding;
         }
         material.first = m_materials_padded_size;
