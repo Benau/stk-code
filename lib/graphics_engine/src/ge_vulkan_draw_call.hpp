@@ -51,14 +51,14 @@ struct ObjectData
     int m_material_id;
     float m_texture_trans[2];
     // ------------------------------------------------------------------------
-    ObjectData(irr::scene::ISceneNode* node, int material_id,
-               int skinning_offset, int irrlicht_material_id);
+    void init(irr::scene::ISceneNode* node, int material_id,
+              int skinning_offset, int irrlicht_material_id);
     // ------------------------------------------------------------------------
-    ObjectData(irr::scene::IBillboardSceneNode* node, int material_id,
-               const irr::core::quaternion& rotation);
+    void init(irr::scene::IBillboardSceneNode* node, int material_id,
+              const irr::core::quaternion& rotation);
     // ------------------------------------------------------------------------
-    ObjectData(const irr::scene::SParticle& particle, int material_id,
-               const irr::core::quaternion& rotation);
+    void init(const irr::scene::SParticle& particle, int material_id,
+              const irr::core::quaternion& rotation);
 };
 
 struct PipelineSettings
@@ -124,6 +124,12 @@ private:
     size_t m_skinning_data_padded_size;
 
     size_t m_materials_padded_size;
+
+    size_t m_bone_count;
+
+    size_t m_sbo_size;
+
+    int m_current_sbo_host_idx;
 
     char* m_data_padding;
 
@@ -221,6 +227,7 @@ public:
         m_data_uploading.clear();
         m_sbo_data_offset.clear();
         m_materials_data.clear();
+        m_bone_count = 0;
     }
 };   // GEVulkanDrawCall
 

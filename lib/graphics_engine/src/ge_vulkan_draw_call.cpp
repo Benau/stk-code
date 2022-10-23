@@ -28,12 +28,11 @@
 namespace GE
 {
 // ============================================================================
-ObjectData::ObjectData(irr::scene::ISceneNode* node, int material_id,
+void ObjectData::init(irr::scene::ISceneNode* node, int material_id,
                        int skinning_offset, int irrlicht_material_id)
 {
     using namespace MiniGLM;
     const irr::core::matrix4& model_mat = node->getAbsoluteTransformation();
-    float translation[3] = { model_mat[12], model_mat[13], model_mat[14] };
     irr::core::quaternion rotation(0.0f, 0.0f, 0.0f, 1.0f);
     irr::core::vector3df scale = model_mat.getScale();
     if (scale.X != 0.0f && scale.Y != 0.0f && scale.Z != 0.0f)
@@ -52,7 +51,8 @@ ObjectData::ObjectData(irr::scene::ISceneNode* node, int material_id,
         // Conjugated quaternion in glsl
         rotation.W = -rotation.W;
     }
-    memcpy(&m_translation_x, translation, sizeof(translation));
+    memcpy(&m_translation_x, &node->getAbsoluteTransformation()[12],
+        sizeof(float) * 3);
     memcpy(m_rotation, &rotation, sizeof(irr::core::quaternion));
     memcpy(&m_scale_x, &scale, sizeof(irr::core::vector3df));
     m_skinning_offset = skinning_offset;
@@ -70,41 +70,42 @@ ObjectData::ObjectData(irr::scene::ISceneNode* node, int material_id,
 }   // ObjectData
 
 // ============================================================================
-ObjectData::ObjectData(irr::scene::IBillboardSceneNode* node, int material_id,
+void ObjectData::init(irr::scene::IBillboardSceneNode* node, int material_id,
                        const irr::core::quaternion& rotation)
 {
     const irr::core::matrix4& model_mat = node->getAbsoluteTransformation();
-    float translation[3] = { model_mat[12], model_mat[13], model_mat[14] };
     irr::core::vector2df billboard_size = node->getSize();
-    irr::core::vector3df scale(billboard_size.X / 2.0f,
-        billboard_size.Y / 2.0f, 0);
-    memcpy(&m_translation_x, translation, sizeof(translation));
+    memcpy(&m_translation_x, &node->getAbsoluteTransformation()[12],
+        sizeof(float) * 3);
     memcpy(m_rotation, &rotation, sizeof(irr::core::quaternion));
-    memcpy(&m_scale_x, &scale, sizeof(irr::core::vector3df));
+    m_scale_x = billboard_size.X / 2.0f;
+    m_scale_y = billboard_size.Y / 2.0f;
+    m_scale_z = 0.0f;
     m_skinning_offset = 0;
     m_material_id = material_id;
     m_texture_trans[0] = 0.0f;
     m_texture_trans[1] = 0.0f;
     m_hue_change = 0.0f;
     // Only support average of them at the moment
-    irr::video::SColor top, bottom;
+    irr::video::SColor top, bottom, output;
     node->getColor(top, bottom);
-    m_custom_vertex_color.setAlpha((top.getAlpha() + bottom.getAlpha()) / 2);
-    m_custom_vertex_color.setRed((top.getRed() + bottom.getRed()) / 2);
-    m_custom_vertex_color.setGreen((top.getGreen() + bottom.getGreen()) / 2);
-    m_custom_vertex_color.setBlue((top.getBlue() + bottom.getBlue()) / 2);
+    output.setAlpha((top.getAlpha() + bottom.getAlpha()) / 2);
+    output.setRed((top.getRed() + bottom.getRed()) / 2);
+    output.setGreen((top.getGreen() + bottom.getGreen()) / 2);
+    output.setBlue((top.getBlue() + bottom.getBlue()) / 2);
+    m_custom_vertex_color = output;
 }   // ObjectData
 
 // ============================================================================
-ObjectData::ObjectData(const irr::scene::SParticle& particle, int material_id,
+void ObjectData::init(const irr::scene::SParticle& particle, int material_id,
                        const irr::core::quaternion& rotation)
 {
     using namespace MiniGLM;
     memcpy(&m_translation_x, &particle.pos, sizeof(float) * 3);
     memcpy(m_rotation, &rotation, sizeof(irr::core::quaternion));
-    irr::core::vector3df scale(particle.size.Width / 2.0f,
-        particle.size.Height / 2.0f, 0);
-    memcpy(&m_scale_x, &scale, sizeof(irr::core::vector3df));
+    m_scale_x = particle.size.Width / 2.0f;
+    m_scale_y = particle.size.Height / 2.0f;
+    m_scale_z = 0.0f;
     m_skinning_offset = 0;
     m_material_id = material_id;
     m_texture_trans[0] = 0.0f;
@@ -123,6 +124,8 @@ GEVulkanDrawCall::GEVulkanDrawCall()
     m_object_data_padded_size = 0;
     m_skinning_data_padded_size = 0;
     m_materials_padded_size = 0;
+    m_bone_count = 0;
+    m_sbo_size = 0;
     m_data_padding = NULL;
     const size_t ubo_padding = m_limits.minUniformBufferOffsetAlignment;
     const size_t sbo_padding = m_limits.minStorageBufferOffsetAlignment;
@@ -133,6 +136,7 @@ GEVulkanDrawCall::GEVulkanDrawCall()
     m_data_padding = new char[padding]();
     irr::core::matrix4 identity;
     memcpy(m_data_padding, identity.pointer(), sizeof(irr::core::matrix4));
+    m_current_sbo_host_idx = 0;
     m_data_layout = VK_NULL_HANDLE;
     m_descriptor_pool = VK_NULL_HANDLE;
     m_pipeline_layout = VK_NULL_HANDLE;
@@ -229,18 +233,35 @@ void GEVulkanDrawCall::generate()
     if (!m_visible_nodes.empty() && m_data_layout == VK_NULL_HANDLE)
         createVulkanData();
 
-    std::vector<std::pair<void*, size_t> > data_uploading;
+    size_t min_size = 0;
+    size_t written_size = 0;
+start:
+    m_sbo_data->resizeIfNeeded(min_size);
+    written_size = 0;
+    uint8_t* mapped_addr = (uint8_t*)m_sbo_data->getMappedAddr()
+        [m_current_sbo_host_idx];
+
     std::unordered_map<irr::scene::ISceneNode*, int> skinning_offets;
     int added_joint = 1;
     m_skinning_data_padded_size = sizeof(irr::core::matrix4);
-    data_uploading.emplace_back((void*)m_data_padding,
-        sizeof(irr::core::matrix4));
+
+    static irr::core::matrix4 identity = irr::core::matrix4();
+    memcpy(mapped_addr, identity.pointer(), sizeof(irr::core::matrix4));
+    written_size += sizeof(irr::core::matrix4);
+    mapped_addr += sizeof(irr::core::matrix4);
+
     for (GEVulkanAnimatedMeshSceneNode* node : m_skinning_nodes)
     {
         int bone_count = node->getSPM()->getJointCount();
         size_t bone_size = sizeof(irr::core::matrix4) * bone_count;
-        data_uploading.emplace_back(
-            (void*)node->getSkinningMatrices().data(), bone_size);
+        if (written_size + bone_size > m_sbo_data->getSize())
+        {
+            min_size = (written_size + bone_size) * 2;
+            goto start;
+        }
+        memcpy(mapped_addr, node->getSkinningMatrices().data(), bone_size);
+        written_size += bone_size;
+        mapped_addr += bone_size;
         skinning_offets[node] = added_joint;
         added_joint += bone_count;
         m_skinning_data_padded_size += bone_size;
@@ -249,9 +270,14 @@ void GEVulkanDrawCall::generate()
     size_t padding = getPadding(m_skinning_data_padded_size, sbo_alignment);
     if (padding > 0)
     {
+        if (written_size + padding > m_sbo_data->getSize())
+        {
+            min_size = (written_size + padding) * 2;
+            goto start;
+        }
         m_skinning_data_padded_size += padding;
-        data_uploading.emplace_back((void*)m_data_padding,
-            padding);
+        written_size += padding;
+        mapped_addr += padding;
     }
 
     using Nodes = std::pair<GESPMBuffer*, std::unordered_map<
@@ -377,9 +403,18 @@ void GEVulkanDrawCall::generate()
                     }
                     if (r.second == BILLBOARD_NODE)
                     {
-                        m_visible_objects.emplace_back(
+                        if (written_size + sizeof(ObjectData) >
+                            m_sbo_data->getSize())
+                        {
+                            min_size = (written_size + sizeof(ObjectData)) * 2;
+                            goto start;
+                        }
+                        ObjectData* obj = (ObjectData*)mapped_addr;
+                        obj->init(
                             static_cast<irr::scene::IBillboardSceneNode*>(
                             node), material_id, m_billboard_rotation);
+                        written_size += sizeof(ObjectData);
+                        mapped_addr += sizeof(ObjectData);
                     }
                     else
                     {
@@ -395,10 +430,20 @@ void GEVulkanDrawCall::generate()
                             continue;
                         }
                         visible_count += ps - 1;
+                        if (written_size + sizeof(ObjectData) * ps >
+                            m_sbo_data->getSize())
+                        {
+                            min_size =
+                                (written_size + sizeof(ObjectData) * ps) * 2;
+                            goto start;
+                        }
+                        ObjectData* obj = (ObjectData*)mapped_addr;
                         for (unsigned i = 0; i < ps; i++)
                         {
-                            m_visible_objects.emplace_back(particles[i],
-                                material_id, m_billboard_rotation);
+                            obj[i].init(particles[i], material_id,
+                                m_billboard_rotation);
+                            written_size += sizeof(ObjectData);
+                            mapped_addr += sizeof(ObjectData);
                         }
                     }
                 }
@@ -408,9 +453,17 @@ void GEVulkanDrawCall::generate()
                     auto it = skinning_offets.find(node);
                     if (it != skinning_offets.end())
                         skinning_offset = it->second;
-                    m_visible_objects.emplace_back(node,
-                        bind_mesh_textures ? -1 : material_id, skinning_offset,
-                        r.second);
+                    if (written_size + sizeof(ObjectData) >
+                        m_sbo_data->getSize())
+                    {
+                        min_size = (written_size + sizeof(ObjectData)) * 2;
+                        goto start;
+                    }
+                    ObjectData* obj = (ObjectData*)mapped_addr;
+                    obj->init(node, bind_mesh_textures ? -1 : material_id,
+                        skinning_offset, r.second);
+                    written_size += sizeof(ObjectData);
+                    mapped_addr += sizeof(ObjectData);
                 }
             }
             VkDrawIndexedIndirectCommand cmd;
@@ -458,15 +511,24 @@ void GEVulkanDrawCall::generate()
 
     if (use_base_vertex)
     {
-        const size_t object_data_size =
-            sizeof(ObjectData) * m_visible_objects.size();
-        data_uploading.emplace_back((void*)m_visible_objects.data(),
-            object_data_size);
-        m_object_data_padded_size = object_data_size;
+        m_object_data_padded_size = written_size - m_skinning_data_padded_size;
+        size_t padding = getPadding(written_size, sbo_alignment);
+        if (padding > 0)
+        {
+            if (written_size + padding > m_sbo_data->getSize())
+            {
+                min_size = (written_size + padding) * 2;
+                goto start;
+            }
+            m_object_data_padded_size += padding;
+            written_size += padding;
+            mapped_addr += padding;
+        }
     }
     else
     {
-        m_object_data_padded_size = 0;
+        
+        /*m_object_data_padded_size = 0;
         std::unordered_map<uint32_t, size_t> offset_map;
         for (unsigned i = 0; i < m_cmds.size(); i++)
         {
@@ -494,7 +556,7 @@ void GEVulkanDrawCall::generate()
             {
                 m_sbo_data_offset.push_back(offset_map.at(first_instance));
             }
-        }
+        }*/
     }
 
     m_materials_padded_size = 0;
@@ -508,15 +570,25 @@ void GEVulkanDrawCall::generate()
             if (cmd.m_shader != cur_shader)
             {
                 size_t material_size = material.second.size() * sizeof(int);
-                m_data_uploading.emplace_back(
-                    material.second.data(), material_size);
-                size_t cur_padding = getPadding(m_materials_padded_size +
-                    material_size, sbo_alignment);
+                if (written_size + material_size > m_sbo_data->getSize())
+                {
+                    min_size = (written_size + material_size) * 2;
+                    goto start;
+                }
+                memcpy(mapped_addr, material.second.data(), material_size);
+                written_size += material_size;
+                mapped_addr += material_size;
+                size_t cur_padding = getPadding(written_size, sbo_alignment);
                 if (cur_padding > 0)
                 {
+                    if (written_size + cur_padding > m_sbo_data->getSize())
+                    {
+                        min_size = (written_size + cur_padding) * 2;
+                        goto start;
+                    }
+                    written_size += padding;
+                    mapped_addr += padding;
                     material_size += cur_padding;
-                    m_data_uploading.emplace_back((void*)m_data_padding,
-                        cur_padding);
                 }
                 material.first = m_materials_padded_size;
                 m_materials_padded_size += material_size;
@@ -528,23 +600,36 @@ void GEVulkanDrawCall::generate()
 
         auto& material = m_materials_data[m_cmds.back().m_shader];
         size_t material_size = material.second.size() * sizeof(int);
-        m_data_uploading.emplace_back(
-            material.second.data(), material_size);
-        size_t cur_padding = getPadding(m_materials_padded_size +
-            material_size, sbo_alignment);
+        if (written_size + material_size > m_sbo_data->getSize())
+        {
+            min_size = (written_size + material_size) * 2;
+            goto start;
+        }
+        memcpy(mapped_addr, material.second.data(), material_size);
+        written_size += material_size;
+        mapped_addr += material_size;
+        size_t cur_padding = getPadding(written_size, sbo_alignment);
         if (cur_padding > 0)
         {
+            if (written_size + cur_padding > m_sbo_data->getSize())
+            {
+                min_size = (written_size + cur_padding) * 2;
+                goto start;
+            }
+            written_size += padding;
+            mapped_addr += padding;
             material_size += cur_padding;
-            m_data_uploading.emplace_back((void*)m_data_padding,
-                cur_padding);
         }
         material.first = m_materials_padded_size;
         m_materials_padded_size += material_size;
-        m_data_uploading.insert(m_data_uploading.end(), data_uploading.begin(),
-            data_uploading.end());
+
+        // Make sure dynamic offsets of materials won't become invalid
+        if (written_size + m_materials_padded_size > m_sbo_data->getSize())
+        {
+            min_size = written_size + m_materials_padded_size;
+            goto start;
+        }
     }
-    else
-        std::swap(m_data_uploading, data_uploading);
 }   // generate
 
 // ----------------------------------------------------------------------------
@@ -1031,7 +1116,7 @@ void GEVulkanDrawCall::createVulkanData()
 
     flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     m_sbo_data = new GEVulkanDynamicBuffer(flags, 10000,
-        GEVulkanDriver::getMaxFrameInFlight(),
+        GEVulkanDriver::getMaxFrameInFlight() + 1,
         GEVulkanDriver::getMaxFrameInFlight(),
         true/*staging_buffer_system_memory*/);
 }   // createVulkanData
@@ -1073,17 +1158,22 @@ void GEVulkanDrawCall::uploadDynamicData(GEVulkanDriver* vk,
     size_t min_size = 0;
     if (!use_base_vertex)
     {
-        // Make sure dynamic offset won't become invaild
+        // Make sure dynamic offset won't become invalid
         min_size = m_skinning_data_padded_size +
              (m_object_data_padded_size * 2);
     }
-    else if (use_multidraw)
+    const size_t whole_size = m_skinning_data_padded_size +
+        m_object_data_padded_size + m_materials_padded_size;
+    if (m_sbo_data->getHostMemory()[m_current_sbo_host_idx])
     {
-        min_size = (m_materials_padded_size * 2) +
-            m_skinning_data_padded_size + m_object_data_padded_size;
+        vmaFlushAllocation(vk->getVmaAllocator(),
+            m_sbo_data->getHostMemory()[m_current_sbo_host_idx], 0,
+            whole_size);
     }
-    m_sbo_data->resizeIfNeeded(min_size);
-    m_sbo_data->setCurrentData(m_data_uploading, cmd);
+    VkBufferCopy copy_region = {};
+    copy_region.size = whole_size;
+    vkCmdCopyBuffer(cmd, m_sbo_data->getHostBuffer()[m_current_sbo_host_idx],
+        m_sbo_data->getLocalBuffer()[vk->getCurrentFrame()], 1, &copy_region);
 
     VkMemoryBarrier barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
@@ -1129,8 +1219,7 @@ void GEVulkanDrawCall::render(GEVulkanDriver* vk, GEVulkanCameraSceneNode* cam,
 
     VkDescriptorBufferInfo sbo_info_objects;
     sbo_info_objects.buffer = m_sbo_data->getCurrentBuffer();
-    sbo_info_objects.offset =
-        m_materials_padded_size + m_skinning_data_padded_size;
+    sbo_info_objects.offset = m_skinning_data_padded_size;
     sbo_info_objects.range = m_object_data_padded_size;
 
     data_set[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1145,7 +1234,7 @@ void GEVulkanDrawCall::render(GEVulkanDriver* vk, GEVulkanCameraSceneNode* cam,
 
     VkDescriptorBufferInfo sbo_info_skinning;
     sbo_info_skinning.buffer = m_sbo_data->getCurrentBuffer();
-    sbo_info_skinning.offset = m_materials_padded_size;
+    sbo_info_skinning.offset = 0;
     sbo_info_skinning.range = m_skinning_data_padded_size;
 
     data_set[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1160,7 +1249,8 @@ void GEVulkanDrawCall::render(GEVulkanDriver* vk, GEVulkanCameraSceneNode* cam,
 
     VkDescriptorBufferInfo sbo_info_material;
     sbo_info_material.buffer = m_sbo_data->getCurrentBuffer();
-    sbo_info_material.offset = 0;
+    sbo_info_material.offset = m_skinning_data_padded_size +
+        m_object_data_padded_size;
     sbo_info_material.range = m_materials_padded_size;
     if (bind_mesh_textures)
     {
@@ -1343,6 +1433,9 @@ void GEVulkanDrawCall::render(GEVulkanDriver* vk, GEVulkanCameraSceneNode* cam,
     }
     if (!drawn_skybox)
         GEVulkanSkyBoxRenderer::render(cmd, cam);
+
+    m_current_sbo_host_idx = (m_current_sbo_host_idx + 1) %
+        (GEVulkanDriver::getMaxFrameInFlight() + 1);
 }   // render
 
 }
