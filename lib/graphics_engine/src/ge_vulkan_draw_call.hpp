@@ -85,6 +85,7 @@ struct DrawCallData
     std::string m_sorting_key;
     GESPMBuffer* m_mb;
     bool m_transparent;
+    uint32_t m_dynamic_offset;
 };
 
 class GEVulkanDrawCall
@@ -151,8 +152,6 @@ private:
     std::unordered_set<GEVulkanAnimatedMeshSceneNode*> m_skinning_nodes;
 
     std::vector<std::pair<void*, size_t> > m_data_uploading;
-
-    std::vector<size_t> m_sbo_data_offset;
 
     std::unordered_map<std::string, std::pair<uint32_t, std::vector<int> > >
         m_materials_data;
@@ -224,7 +223,6 @@ public:
         m_materials.clear();
         m_skinning_nodes.clear();
         m_data_uploading.clear();
-        m_sbo_data_offset.clear();
         m_bone_count = 0;
     }
 };   // GEVulkanDrawCall

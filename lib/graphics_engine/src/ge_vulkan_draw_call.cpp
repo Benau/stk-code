@@ -233,57 +233,6 @@ void GEVulkanDrawCall::generate()
     if (!m_visible_nodes.empty() && m_data_layout == VK_NULL_HANDLE)
         createVulkanData();
 
-    size_t min_size = 0;
-    size_t written_size = 0;
-start:
-    m_cmds.clear();
-    m_materials.clear();
-    m_materials_data.clear();
-
-    m_sbo_data->resizeIfNeeded(min_size);
-    written_size = 0;
-    uint8_t* mapped_addr = (uint8_t*)m_sbo_data->getMappedAddr()
-        [m_current_sbo_host_idx];
-
-    std::unordered_map<irr::scene::ISceneNode*, int> skinning_offets;
-    int added_joint = 1;
-    m_skinning_data_padded_size = sizeof(irr::core::matrix4);
-
-    static irr::core::matrix4 identity = irr::core::matrix4();
-    memcpy(mapped_addr, identity.pointer(), sizeof(irr::core::matrix4));
-    written_size += sizeof(irr::core::matrix4);
-    mapped_addr += sizeof(irr::core::matrix4);
-
-    for (GEVulkanAnimatedMeshSceneNode* node : m_skinning_nodes)
-    {
-        int bone_count = node->getSPM()->getJointCount();
-        size_t bone_size = sizeof(irr::core::matrix4) * bone_count;
-        if (written_size + bone_size > m_sbo_data->getSize())
-        {
-            min_size = (written_size + bone_size) * 2;
-            goto start;
-        }
-        memcpy(mapped_addr, node->getSkinningMatrices().data(), bone_size);
-        written_size += bone_size;
-        mapped_addr += bone_size;
-        skinning_offets[node] = added_joint;
-        added_joint += bone_count;
-        m_skinning_data_padded_size += bone_size;
-    }
-    size_t sbo_alignment = m_limits.minStorageBufferOffsetAlignment;
-    size_t padding = getPadding(m_skinning_data_padded_size, sbo_alignment);
-    if (padding > 0)
-    {
-        if (written_size + padding > m_sbo_data->getSize())
-        {
-            min_size = (written_size + padding) * 2;
-            goto start;
-        }
-        m_skinning_data_padded_size += padding;
-        written_size += padding;
-        mapped_addr += padding;
-    }
-
     using Nodes = std::pair<GESPMBuffer*, std::unordered_map<
         std::string, std::vector<std::pair<irr::scene::ISceneNode*, int
         > > > >;
@@ -318,6 +267,56 @@ start:
             return nodes_area.at(a.first) < nodes_area.at(b.first) ;
         });
 
+    size_t min_size = 0;
+start:
+    m_cmds.clear();
+    m_materials.clear();
+    m_materials_data.clear();
+
+    m_sbo_data->resizeIfNeeded(min_size);
+    uint8_t* mapped_addr = (uint8_t*)m_sbo_data->getMappedAddr()
+        [m_current_sbo_host_idx];
+
+    std::unordered_map<irr::scene::ISceneNode*, int> skinning_offets;
+    int added_joint = 1;
+    m_skinning_data_padded_size = sizeof(irr::core::matrix4);
+
+    static irr::core::matrix4 identity = irr::core::matrix4();
+    memcpy(mapped_addr, identity.pointer(), sizeof(irr::core::matrix4));
+    size_t written_size = sizeof(irr::core::matrix4);
+    mapped_addr += sizeof(irr::core::matrix4);
+
+    for (GEVulkanAnimatedMeshSceneNode* node : m_skinning_nodes)
+    {
+        int bone_count = node->getSPM()->getJointCount();
+        size_t bone_size = sizeof(irr::core::matrix4) * bone_count;
+        if (written_size + bone_size > m_sbo_data->getSize())
+        {
+            min_size = (written_size + bone_size) * 2;
+            goto start;
+        }
+        memcpy(mapped_addr, node->getSkinningMatrices().data(), bone_size);
+        written_size += bone_size;
+        mapped_addr += bone_size;
+        skinning_offets[node] = added_joint;
+        added_joint += bone_count;
+        m_skinning_data_padded_size += bone_size;
+    }
+    size_t sbo_alignment = m_limits.minStorageBufferOffsetAlignment;
+    size_t skinning_padding = getPadding(m_skinning_data_padded_size,
+        sbo_alignment);
+    if (skinning_padding > 0)
+    {
+        if (written_size + skinning_padding > m_sbo_data->getSize())
+        {
+            min_size = (written_size + skinning_padding) * 2;
+            goto start;
+        }
+        m_skinning_data_padded_size += skinning_padding;
+        written_size += skinning_padding;
+        mapped_addr += skinning_padding;
+    }
+
     const bool use_base_vertex = GEVulkanFeatures::supportsBaseVertexRendering();
     const bool bind_mesh_textures =
         GEVulkanFeatures::supportsBindMeshTexturesAtOnce();
@@ -332,6 +331,9 @@ start:
     };
     std::unordered_map<irr::scene::IMesh*, std::vector<InstanceKey> >
         instance_keys;
+    size_t instance_offset = 0;
+    const uint8_t* instance_start_ptr = mapped_addr;
+    std::unordered_map<uint32_t, uint32_t> offset_map;
     for (auto& p : visible_nodes)
     {
         TexturesList textures = getTexturesList(p.first->getMaterial());
@@ -478,6 +480,24 @@ start:
             if (skip_instance_key || it == cur_key.end())
             {
                 cmd.firstInstance = accumulated_instance;
+                if (!use_base_vertex)
+                {
+                    offset_map[accumulated_instance] = instance_offset;
+                    size_t instance_padding = getPadding(written_size,
+                        sbo_alignment);
+                    if (instance_padding > 0)
+                    {
+                        if (written_size + instance_padding >
+                            m_sbo_data->getSize())
+                        {
+                            min_size = (written_size + instance_padding) * 2;
+                            goto start;
+                        }
+                        written_size += instance_padding;
+                        mapped_addr += instance_padding;
+                    }
+                    instance_offset = mapped_addr - instance_start_ptr;
+                }
                 accumulated_instance += visible_count;
             }
             else
@@ -487,7 +507,7 @@ start:
             std::string sorting_key =
                 std::string(1, settings.m_drawing_priority) + cur_shader;
             m_cmds.push_back({ cmd, cur_shader, sorting_key, p.first,
-                settings.isTransparent() });
+                settings.isTransparent(), offset_map[cmd.firstInstance] });
             if (!skip_instance_key && it == cur_key.end())
                  cur_key.push_back(key);
         }
@@ -513,54 +533,18 @@ start:
             return !a.m_transparent;
         });
 
-    if (use_base_vertex)
+    m_object_data_padded_size = written_size - m_skinning_data_padded_size;
+    size_t object_padding = getPadding(written_size, sbo_alignment);
+    if (object_padding > 0)
     {
-        m_object_data_padded_size = written_size - m_skinning_data_padded_size;
-        size_t padding = getPadding(written_size, sbo_alignment);
-        if (padding > 0)
+        if (written_size + object_padding > m_sbo_data->getSize())
         {
-            if (written_size + padding > m_sbo_data->getSize())
-            {
-                min_size = (written_size + padding) * 2;
-                goto start;
-            }
-            m_object_data_padded_size += padding;
-            written_size += padding;
-            mapped_addr += padding;
+            min_size = (written_size + object_padding) * 2;
+            goto start;
         }
-    }
-    else
-    {
-        
-        /*m_object_data_padded_size = 0;
-        std::unordered_map<uint32_t, size_t> offset_map;
-        for (unsigned i = 0; i < m_cmds.size(); i++)
-        {
-            auto& cmd = m_cmds[i];
-            uint32_t first_instance = cmd.m_cmd.firstInstance;
-            if (offset_map.find(first_instance) == offset_map.end())
-            {
-                size_t instance_size =
-                    cmd.m_cmd.instanceCount * sizeof(ObjectData);
-                data_uploading.emplace_back(
-                    &m_visible_objects[first_instance], instance_size);
-                size_t cur_padding = getPadding(m_object_data_padded_size +
-                    instance_size, sbo_alignment);
-                if (cur_padding > 0)
-                {
-                    instance_size += cur_padding;
-                    data_uploading.emplace_back((void*)m_data_padding,
-                        cur_padding);
-                }
-                m_sbo_data_offset.push_back(m_object_data_padded_size);
-                offset_map[cmd.m_cmd.firstInstance] = m_object_data_padded_size;
-                m_object_data_padded_size += instance_size;
-            }
-            else
-            {
-                m_sbo_data_offset.push_back(offset_map.at(first_instance));
-            }
-        }*/
+        m_object_data_padded_size += object_padding;
+        written_size += object_padding;
+        mapped_addr += object_padding;
     }
 
     m_materials_padded_size = 0;
@@ -631,6 +615,17 @@ start:
         if (written_size + m_materials_padded_size > m_sbo_data->getSize())
         {
             min_size = written_size + m_materials_padded_size;
+            goto start;
+        }
+    }
+    else if (!use_base_vertex)
+    {
+        // Make sure dynamic offset of objects won't become invalid
+        if (m_skinning_data_padded_size + (m_object_data_padded_size * 2) >
+            m_sbo_data->getSize())
+        {
+            min_size = m_skinning_data_padded_size +
+                (m_object_data_padded_size * 2);
             goto start;
         }
     }
@@ -1158,14 +1153,6 @@ void GEVulkanDrawCall::uploadDynamicData(GEVulkanDriver* vk,
     }
     m_dynamic_data->setCurrentData(data_uploading, cmd);
 
-    const bool use_base_vertex = GEVulkanFeatures::supportsBaseVertexRendering();
-    size_t min_size = 0;
-    if (!use_base_vertex)
-    {
-        // Make sure dynamic offset won't become invalid
-        min_size = m_skinning_data_padded_size +
-             (m_object_data_padded_size * 2);
-    }
     const size_t whole_size = m_skinning_data_padded_size +
         m_object_data_padded_size + m_materials_padded_size;
     if (m_sbo_data->getHostMemory()[m_current_sbo_host_idx])
@@ -1422,7 +1409,7 @@ void GEVulkanDrawCall::render(GEVulkanDriver* vk, GEVulkanCameraSceneNode* cam,
                 std::array<uint32_t, 3> dynamic_offsets =
                 {{
                     0u,
-                    uint32_t(m_sbo_data_offset[i]),
+                    m_cmds[i].m_dynamic_offset,
                     0u
                 }};
                 vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,

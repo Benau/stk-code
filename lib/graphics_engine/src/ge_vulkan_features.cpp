@@ -187,6 +187,9 @@ void GEVulkanFeatures::init(GEVulkanDriver* vk)
     // https://github.com/KhronosGroup/MoltenVK/issues/1743
     g_supports_shader_draw_parameters = false;
 #endif
+g_supports_base_vertex_rendering = false;
+        g_supports_multi_draw_indirect = false;
+
 }   // init
 
 // ----------------------------------------------------------------------------
