@@ -407,8 +407,8 @@ void ClientLobby::update(int ticks)
     {
         NetworkConfig::get()->clearServerCapabilities();
         std::string ua = StringUtils::getUserAgentString();
-        if (NetworkConfig::get()->isNetworkAIInstance())
-            ua = "AI";
+        //if (NetworkConfig::get()->isNetworkAIInstance())
+        //    ua = "AI";
         NetworkString* ns = getNetworkString();
         ns->addUInt8(LE_CONNECTION_REQUESTED)
             .addUInt32(ServerConfig::m_server_version).encodeString(ua)

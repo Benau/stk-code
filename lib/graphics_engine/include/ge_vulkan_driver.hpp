@@ -327,7 +327,6 @@ namespace GE
                                        { return m_vk->swap_chain_framebuffers; }
 
         unsigned int getCurrentFrame() const         { return m_current_frame; }
-        unsigned int getCurrentImageIndex() const      { return m_image_index; }
         constexpr static unsigned getMaxFrameInFlight()            { return 2; }
         video::SColor getClearColor() const            { return m_clear_color; }
         video::SColor getRTTClearColor() const     { return m_rtt_clear_color; }
@@ -504,7 +503,6 @@ namespace GE
         VkPhysicalDeviceFeatures m_features;
 
         unsigned int m_current_frame;
-        uint32_t m_image_index;
         video::SColor m_clear_color, m_rtt_clear_color;
         core::rect<s32> m_clip;
         core::rect<s32> m_viewport;
@@ -548,9 +546,10 @@ namespace GE
         std::string getDriverVersionString() const;
         void destroySwapChainRelated(bool handle_surface);
         void createSwapChainRelated(bool handle_surface);
-        void buildCommandBuffers();
+        void buildCommandBuffers(unsigned frame_index, unsigned image_index);
         void buildSecondaryCommandBuffers();
         void createBillboardQuad();
+        void submitCommand(unsigned frame_index);
     };
 
 }

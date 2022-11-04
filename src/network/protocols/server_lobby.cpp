@@ -2674,7 +2674,7 @@ void ServerLobby::startSelection(const Event *event)
     ns->setSynchronous(true);
     ns->addUInt8(LE_START_SELECTION)
        .addFloat(ServerConfig::m_voting_timeout)
-       .addUInt8(m_game_setup->isGrandPrixStarted() ? 1 : 0)
+       .addUInt8((uint8_t)1)
        .addUInt8(ServerConfig::m_auto_game_time_ratio > 0.0f ? 1 : 0)
        .addUInt8(ServerConfig::m_track_voting ? 1 : 0);
 

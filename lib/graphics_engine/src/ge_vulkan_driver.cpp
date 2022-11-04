@@ -516,7 +516,6 @@ GEVulkanDriver::GEVulkanDriver(const SIrrlichtCreationParameters& params,
     m_features = {};
 
     m_current_frame = 0;
-    m_image_index = 0;
     m_clear_color = video::SColor(0);
     m_rtt_clear_color = m_clear_color;
     m_white_texture = NULL;
@@ -1746,22 +1745,29 @@ bool GEVulkanDriver::endScene()
     vkResetCommandPool(m_vk->device, m_vk->command_pools[m_current_frame], 0);
     buildSecondaryCommandBuffers();
 
-    VkSemaphore semaphore = m_vk->image_available_semaphores[m_current_frame];
+    unsigned frame_index = m_current_frame;
+    m_current_frame = (m_current_frame + 1) % getMaxFrameInFlight();
+    submitCommand(frame_index);
+    return video::CNullDriver::endScene();
+}   // endScene
+
+// ----------------------------------------------------------------------------
+void GEVulkanDriver::submitCommand(unsigned frame_index)
+{
+    unsigned image_index = 0;
+    VkSemaphore semaphore = m_vk->image_available_semaphores[frame_index];
     VkResult result = vkAcquireNextImageKHR(m_vk->device, m_vk->swap_chain,
         std::numeric_limits<uint64_t>::max(), semaphore, VK_NULL_HANDLE,
-        &m_image_index);
+        &image_index);
 
     if (result != VK_SUCCESS)
-    {
-        video::CNullDriver::endScene();
-        return false;
-    }
+        return;
 
-    buildCommandBuffers();
+    buildCommandBuffers(frame_index, image_index);
 
-    VkSemaphore wait_semaphores[] = {m_vk->image_available_semaphores[m_current_frame]};
+    VkSemaphore wait_semaphores[] = {m_vk->image_available_semaphores[frame_index]};
     VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    VkSemaphore signal_semaphores[] = {m_vk->render_finished_semaphores[m_current_frame]};
+    VkSemaphore signal_semaphores[] = {m_vk->render_finished_semaphores[frame_index]};
 
     VkSubmitInfo submit_info = {};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1769,14 +1775,14 @@ bool GEVulkanDriver::endScene()
     submit_info.pWaitSemaphores = wait_semaphores;
     submit_info.pWaitDstStageMask = wait_stages;
     submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &m_vk->command_buffers[m_current_frame];
+    submit_info.pCommandBuffers = &m_vk->command_buffers[frame_index];
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores = signal_semaphores;
 
     VkQueue queue = VK_NULL_HANDLE;
     std::unique_lock<std::mutex> ul = getGraphicsQueue(&queue);
     result = vkQueueSubmit(queue, 1, &submit_info,
-        m_vk->in_flight_fences[m_current_frame]);
+        m_vk->in_flight_fences[frame_index]);
     ul.unlock();
 
     if (result != VK_SUCCESS)
@@ -1784,7 +1790,7 @@ bool GEVulkanDriver::endScene()
 
     VkSemaphore semaphores[] =
     {
-        m_vk->render_finished_semaphores[m_current_frame]
+        m_vk->render_finished_semaphores[frame_index]
     };
     VkSwapchainKHR swap_chains[] =
     {
@@ -1797,9 +1803,7 @@ bool GEVulkanDriver::endScene()
     present_info.pWaitSemaphores = semaphores;
     present_info.swapchainCount = 1;
     present_info.pSwapchains = swap_chains;
-    present_info.pImageIndices = &m_image_index;
-
-    m_current_frame = (m_current_frame + 1) % getMaxFrameInFlight();
+    present_info.pImageIndices = &image_index;
 
     if (m_present_queue)
         result = vkQueuePresentKHR(m_present_queue, &present_info);
@@ -1810,11 +1814,7 @@ bool GEVulkanDriver::endScene()
         result = vkQueuePresentKHR(present_queue, &present_info);
         ul.unlock();
     }
-    if (!video::CNullDriver::endScene())
-        return false;
-
-    return (result != VK_ERROR_OUT_OF_DATE_KHR && result != VK_SUBOPTIMAL_KHR);
-}   // endScene
+}   // submitCommand
 
 // ----------------------------------------------------------------------------
 void GEVulkanDriver::draw2DVertexPrimitiveList(const void* vertices,
@@ -2371,7 +2371,8 @@ GEVulkanMeshCache* GEVulkanDriver::getVulkanMeshCache() const
 }   // getVulkanMeshCache
 
 // ----------------------------------------------------------------------------
-void GEVulkanDriver::buildCommandBuffers()
+void GEVulkanDriver::buildCommandBuffers(unsigned frame_index,
+                                         unsigned image_index)
 {
     std::array<VkClearValue, 2> clear_values = {};
     video::SColorf cf(getClearColor());
@@ -2397,8 +2398,7 @@ void GEVulkanDriver::buildCommandBuffers()
     else
     {
         render_pass_info.renderPass = getRenderPass();
-        render_pass_info.framebuffer =
-            getSwapChainFramebuffers()[getCurrentImageIndex()];
+        render_pass_info.framebuffer = getSwapChainFramebuffers()[image_index];
         render_pass_info.renderArea.extent = getSwapChainExtent();
     }
 
@@ -2406,39 +2406,38 @@ void GEVulkanDriver::buildCommandBuffers()
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    VkResult result = vkBeginCommandBuffer(getCurrentCommandBuffer(),
-        &begin_info);
+    VkCommandBuffer cur_cmd = m_vk->command_buffers[frame_index];
+    VkResult result = vkBeginCommandBuffer(cur_cmd, &begin_info);
     if (result != VK_SUCCESS)
         return;
 
     if (!GEVulkanDynamicBuffer::supportsHostTransfer())
     {
-        vkCmdExecuteCommands(getCurrentCommandBuffer(), 1,
-            &(getSecondaryCommandBuffer()[m_current_frame][GSP_COPY]));
+        vkCmdExecuteCommands(cur_cmd, 1,
+            &(getSecondaryCommandBuffer()[frame_index][GSP_COPY]));
     }
 
-    vkCmdBeginRenderPass(getCurrentCommandBuffer(), &render_pass_info,
+    vkCmdBeginRenderPass(cur_cmd, &render_pass_info,
         VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
     if (m_rtt_texture)
     {
-        vkCmdExecuteCommands(getCurrentCommandBuffer(), 1,
-            &(getSecondaryCommandBuffer()[m_current_frame][GSP_RTT]));
-        vkCmdEndRenderPass(getCurrentCommandBuffer());
+        vkCmdExecuteCommands(cur_cmd, 1,
+            &(getSecondaryCommandBuffer()[frame_index][GSP_RTT]));
+        vkCmdEndRenderPass(cur_cmd);
 
         // No depth buffer in main framebuffer if RTT is used
         render_pass_info.clearValueCount = 1;
         render_pass_info.renderPass = getRenderPass();
-        render_pass_info.framebuffer =
-            getSwapChainFramebuffers()[getCurrentImageIndex()];
+        render_pass_info.framebuffer = getSwapChainFramebuffers()[image_index];
         render_pass_info.renderArea.extent = getSwapChainExtent();
-        vkCmdBeginRenderPass(getCurrentCommandBuffer(), &render_pass_info,
+        vkCmdBeginRenderPass(cur_cmd, &render_pass_info,
             VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
     }
-    vkCmdExecuteCommands(getCurrentCommandBuffer(), 1,
-        &(getSecondaryCommandBuffer()[m_current_frame][GSP_MAIN_FB]));
+    vkCmdExecuteCommands(cur_cmd, 1,
+        &(getSecondaryCommandBuffer()[frame_index][GSP_MAIN_FB]));
 
-    vkCmdEndRenderPass(getCurrentCommandBuffer());
-    vkEndCommandBuffer(getCurrentCommandBuffer());
+    vkCmdEndRenderPass(cur_cmd);
+    vkEndCommandBuffer(cur_cmd);
 }   // buildCommandBuffers
 
 // ----------------------------------------------------------------------------
