@@ -282,6 +282,7 @@ void GEVulkan2dRenderer::render()
 
     VkDeviceSize offsets[] = {0};
     VkBuffer buffer = VK_NULL_HANDLE;
+    VkCommandBuffer render_buffer = VK_NULL_HANDLE;
     unsigned idx = 0;
     unsigned idx_count = 0;
     int sampler_idx = 0;
@@ -293,13 +294,15 @@ void GEVulkan2dRenderer::render()
     if (buffer == VK_NULL_HANDLE)
         goto end;
 
-    vkCmdBindPipeline(g_vk->getCurrentCommandBuffer(),
-        VK_PIPELINE_BIND_POINT_GRAPHICS, g_graphics_pipeline);
+    render_buffer = g_vk->getSecondaryCommandBuffer()
+        [g_vk->getCurrentFrame()][GSP_MAIN_FB];
 
-    vkCmdBindVertexBuffers(g_vk->getCurrentCommandBuffer(), 0, 1,
-        &buffer, offsets);
+    vkCmdBindPipeline(render_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        g_graphics_pipeline);
 
-    vkCmdBindIndexBuffer(g_vk->getCurrentCommandBuffer(), buffer,
+    vkCmdBindVertexBuffers(render_buffer, 0, 1, &buffer, offsets);
+
+    vkCmdBindIndexBuffer(render_buffer, buffer,
         g_tris_queue.size() * sizeof(Tri), VK_INDEX_TYPE_UINT16);
 
     VkViewport vp;
@@ -310,13 +313,12 @@ void GEVulkan2dRenderer::render()
     vp.minDepth = 0;
     vp.maxDepth = 1.0f;
     g_vk->getRotatedViewport(&vp, false/*handle_rtt*/);
-    vkCmdSetViewport(g_vk->getCurrentCommandBuffer(), 0, 1, &vp);
+    vkCmdSetViewport(render_buffer, 0, 1, &vp);
 
     if (GEVulkanFeatures::supportsBindTexturesAtOnce())
     {
-        vkCmdBindDescriptorSets(g_vk->getCurrentCommandBuffer(),
-            VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipeline_layout, 0, 1,
-            descriptor_set, 0, NULL);
+        vkCmdBindDescriptorSets(render_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            g_pipeline_layout, 0, 1, descriptor_set, 0, NULL);
     }
 
     sampler_idx = g_tris_queue[0].sampler_idx;
@@ -332,7 +334,7 @@ void GEVulkan2dRenderer::render()
         {
             if (!GEVulkanFeatures::supportsBindTexturesAtOnce())
             {
-                vkCmdBindDescriptorSets(g_vk->getCurrentCommandBuffer(),
+                vkCmdBindDescriptorSets(render_buffer,
                     VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipeline_layout, 0, 1,
                     &descriptor_set[sampler_idx], 0, NULL);
             }
@@ -343,10 +345,10 @@ void GEVulkan2dRenderer::render()
             scissor.extent.width = clip.getWidth();
             scissor.extent.height = clip.getHeight();
             g_vk->getRotatedRect2D(&scissor);
-            vkCmdSetScissor(g_vk->getCurrentCommandBuffer(), 0, 1, &scissor);
+            vkCmdSetScissor(render_buffer, 0, 1, &scissor);
 
-            vkCmdDrawIndexed(g_vk->getCurrentCommandBuffer(), idx_count, 1,
-                idx - idx_count, 0, 0);
+            vkCmdDrawIndexed(render_buffer, idx_count, 1, idx - idx_count, 0,
+                0);
             sampler_idx = cur_sampler_idx;
             clip = cur_clip;
             idx_count = 3;
@@ -358,9 +360,8 @@ void GEVulkan2dRenderer::render()
     }
     if (!GEVulkanFeatures::supportsBindTexturesAtOnce())
     {
-        vkCmdBindDescriptorSets(g_vk->getCurrentCommandBuffer(),
-            VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipeline_layout, 0, 1,
-            &descriptor_set[sampler_idx], 0, NULL);
+        vkCmdBindDescriptorSets(render_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            g_pipeline_layout, 0, 1, &descriptor_set[sampler_idx], 0, NULL);
     }
 
     VkRect2D scissor;
@@ -369,10 +370,9 @@ void GEVulkan2dRenderer::render()
     scissor.extent.width = clip.getWidth();
     scissor.extent.height = clip.getHeight();
     g_vk->getRotatedRect2D(&scissor);
-    vkCmdSetScissor(g_vk->getCurrentCommandBuffer(), 0, 1, &scissor);
+    vkCmdSetScissor(render_buffer, 0, 1, &scissor);
 
-    vkCmdDrawIndexed(g_vk->getCurrentCommandBuffer(), idx_count, 1,
-        idx - idx_count, 0, 0);
+    vkCmdDrawIndexed(render_buffer, idx_count, 1, idx - idx_count, 0, 0);
 
 end:
     clear();

@@ -40,6 +40,13 @@ namespace GE
         GVS_2D_RENDER,
         GVS_COUNT,
     };
+    enum GEVulkanSecondaryPass : unsigned
+    {
+        GSP_COPY = 0,
+        GSP_MAIN_FB,
+        GSP_RTT,
+        GSP_COUNT,
+    };
     class GEVulkanDriver : public video::CNullDriver
     {
     public:
@@ -311,6 +318,9 @@ namespace GE
         void copyBuffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size);
         VkCommandBuffer getCurrentCommandBuffer()
                               { return m_vk->command_buffers[m_current_frame]; }
+        std::vector<std::array<VkCommandBuffer, GSP_COUNT> >&
+                                                     getSecondaryCommandBuffer()
+                                     { return m_vk->secondary_command_buffers; }
         std::vector<VkImage>& getSwapChainImages()
                                              { return m_vk->swap_chain_images; }
         std::vector<VkFramebuffer>& getSwapChainFramebuffers()
@@ -415,6 +425,7 @@ namespace GE
             std::vector<VkFence> in_flight_fences;
             std::vector<VkCommandPool> command_pools;
             std::vector<VkCommandBuffer> command_buffers;
+            std::vector<std::array<VkCommandBuffer, GSP_COUNT> > secondary_command_buffers;
             std::array<VkSampler, GVS_COUNT> samplers;
             VkRenderPass render_pass;
             std::vector<VkFramebuffer> swap_chain_framebuffers;
@@ -431,6 +442,12 @@ namespace GE
             }
             ~VK()
             {
+                for (unsigned i = 0; i < secondary_command_buffers.size(); i++)
+                {
+                    vkFreeCommandBuffers(device, command_pools[i],
+                        secondary_command_buffers[1].size(),
+                        secondary_command_buffers[i].data());
+                }
                 for (unsigned i = 0; i < command_buffers.size(); i++)
                 {
                     vkFreeCommandBuffers(device, command_pools[i], 1,
@@ -532,6 +549,7 @@ namespace GE
         void destroySwapChainRelated(bool handle_surface);
         void createSwapChainRelated(bool handle_surface);
         void buildCommandBuffers();
+        void buildSecondaryCommandBuffers();
         void createBillboardQuad();
     };
 

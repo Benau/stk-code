@@ -11,6 +11,7 @@
 #include "ge_vulkan_command_loader.hpp"
 #include "ge_vulkan_depth_texture.hpp"
 #include "ge_vulkan_draw_call.hpp"
+#include "ge_vulkan_dynamic_buffer.hpp"
 #include "ge_vulkan_fbo_texture.hpp"
 #include "ge_vulkan_features.hpp"
 #include "ge_vulkan_mesh_cache.hpp"
@@ -1386,6 +1387,7 @@ void GEVulkanDriver::createCommandBuffers()
 {
     m_vk->command_pools.resize(getMaxFrameInFlight());
     m_vk->command_buffers.resize(getMaxFrameInFlight());
+    m_vk->secondary_command_buffers.resize(getMaxFrameInFlight());
     for (unsigned i = 0; i < getMaxFrameInFlight(); i++)
     {
         VkCommandPoolCreateInfo pool_info = {};
@@ -1405,7 +1407,21 @@ void GEVulkanDriver::createCommandBuffers()
         result = vkAllocateCommandBuffers(m_vk->device, &alloc_info,
             &m_vk->command_buffers[i]);
         if (result != VK_SUCCESS)
-            throw std::runtime_error("vkAllocateCommandBuffers failed");
+        {
+            throw std::runtime_error(
+                "vkAllocateCommandBuffers failed for primary");
+        }
+
+        alloc_info.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+        alloc_info.commandBufferCount =
+            m_vk->secondary_command_buffers[i].size();
+        result = vkAllocateCommandBuffers(m_vk->device, &alloc_info,
+            m_vk->secondary_command_buffers[i].data());
+        if (result != VK_SUCCESS)
+        {
+            throw std::runtime_error(
+                "vkAllocateCommandBuffers failed for secondary");
+        }
     }
 }   // createCommandBuffers
 
@@ -1728,6 +1744,7 @@ bool GEVulkanDriver::endScene()
     VkFence fence = m_vk->in_flight_fences[m_current_frame];
     vkResetFences(m_vk->device, 1, &fence);
     vkResetCommandPool(m_vk->device, m_vk->command_pools[m_current_frame], 0);
+    buildSecondaryCommandBuffers();
 
     VkSemaphore semaphore = m_vk->image_available_semaphores[m_current_frame];
     VkResult result = vkAcquireNextImageKHR(m_vk->device, m_vk->swap_chain,
@@ -1737,8 +1754,6 @@ bool GEVulkanDriver::endScene()
     if (result != VK_SUCCESS)
     {
         video::CNullDriver::endScene();
-        GEVulkan2dRenderer::clear();
-        handleDeletedTextures();
         return false;
     }
 
@@ -2396,26 +2411,20 @@ void GEVulkanDriver::buildCommandBuffers()
     if (result != VK_SUCCESS)
         return;
 
-    GEVulkan2dRenderer::uploadTrisBuffers();
-    for (auto& p : static_cast<GEVulkanSceneManager*>(
-        m_irrlicht_device->getSceneManager())->getDrawCalls())
+    if (!GEVulkanDynamicBuffer::supportsHostTransfer())
     {
-        p.second->uploadDynamicData(this, p.first);
+        vkCmdExecuteCommands(getCurrentCommandBuffer(), 1,
+            &(getSecondaryCommandBuffer()[m_current_frame][GSP_COPY]));
     }
 
     vkCmdBeginRenderPass(getCurrentCommandBuffer(), &render_pass_info,
-        VK_SUBPASS_CONTENTS_INLINE);
-
-    for (auto& p : static_cast<GEVulkanSceneManager*>(
-        m_irrlicht_device->getSceneManager())->getDrawCalls())
-    {
-        p.second->render(this, p.first);
-        PrimitivesDrawn += p.second->getPolyCount();
-    }
-
+        VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
     if (m_rtt_texture)
     {
+        vkCmdExecuteCommands(getCurrentCommandBuffer(), 1,
+            &(getSecondaryCommandBuffer()[m_current_frame][GSP_RTT]));
         vkCmdEndRenderPass(getCurrentCommandBuffer());
+
         // No depth buffer in main framebuffer if RTT is used
         render_pass_info.clearValueCount = 1;
         render_pass_info.renderPass = getRenderPass();
@@ -2423,16 +2432,80 @@ void GEVulkanDriver::buildCommandBuffers()
             getSwapChainFramebuffers()[getCurrentImageIndex()];
         render_pass_info.renderArea.extent = getSwapChainExtent();
         vkCmdBeginRenderPass(getCurrentCommandBuffer(), &render_pass_info,
-            VK_SUBPASS_CONTENTS_INLINE);
+            VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
     }
-
-    GEVulkan2dRenderer::render();
+    vkCmdExecuteCommands(getCurrentCommandBuffer(), 1,
+        &(getSecondaryCommandBuffer()[m_current_frame][GSP_MAIN_FB]));
 
     vkCmdEndRenderPass(getCurrentCommandBuffer());
     vkEndCommandBuffer(getCurrentCommandBuffer());
+}   // buildCommandBuffers
+
+// ----------------------------------------------------------------------------
+void GEVulkanDriver::buildSecondaryCommandBuffers()
+{
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VkCommandBufferInheritanceInfo inheritance_info = {};
+    inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+    begin_info.pInheritanceInfo = &inheritance_info;
+
+    VkCommandBuffer cmd_copy = getSecondaryCommandBuffer()[m_current_frame]
+        [GSP_COPY];
+    VkCommandBuffer cmd_main_fb = getSecondaryCommandBuffer()[m_current_frame]
+        [GSP_MAIN_FB];
+    VkCommandBuffer cmd_rtt = getSecondaryCommandBuffer()[m_current_frame]
+        [GSP_RTT];
+
+    VkResult result = VK_SUCCESS;
+    if (!GEVulkanDynamicBuffer::supportsHostTransfer())
+    {
+        result = vkBeginCommandBuffer(cmd_copy, &begin_info);
+        if (result != VK_SUCCESS)
+            return;
+    }
+
+    GEVulkan2dRenderer::uploadTrisBuffers();
+    for (auto& p : static_cast<GEVulkanSceneManager*>(
+        m_irrlicht_device->getSceneManager())->getDrawCalls())
+    {
+        p.second->uploadDynamicData(this, p.first, cmd_copy);
+    }
+    if (!GEVulkanDynamicBuffer::supportsHostTransfer())
+        vkEndCommandBuffer(cmd_copy);
+
+    begin_info.flags |= VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+    if (m_rtt_texture)
+        inheritance_info.renderPass = m_rtt_texture->getRTTRenderPass();
+    else
+        inheritance_info.renderPass = getRenderPass();
+
+    result = vkBeginCommandBuffer(m_rtt_texture ? cmd_rtt : cmd_main_fb,
+        &begin_info);
+    if (result != VK_SUCCESS)
+        return;
+    for (auto& p : static_cast<GEVulkanSceneManager*>(
+        m_irrlicht_device->getSceneManager())->getDrawCalls())
+    {
+        p.second->render(this, p.first, m_rtt_texture ? cmd_rtt : cmd_main_fb);
+        PrimitivesDrawn += p.second->getPolyCount();
+    }
+
+    if (m_rtt_texture)
+    {
+        vkEndCommandBuffer(cmd_rtt);
+        inheritance_info.renderPass = getRenderPass();
+        result = vkBeginCommandBuffer(cmd_main_fb, &begin_info);
+        if (result != VK_SUCCESS)
+            return;
+    }
+
+    GEVulkan2dRenderer::render();
+    vkEndCommandBuffer(cmd_main_fb);
 
     handleDeletedTextures();
-}   // buildCommandBuffers
+}   // buildSecondaryCommandBuffers
 
 // ----------------------------------------------------------------------------
 VkFormat GEVulkanDriver::findSupportedFormat(const std::vector<VkFormat>& candidates,
