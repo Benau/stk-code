@@ -788,7 +788,7 @@ void GEVulkanDriver::createInstance(SDL_Window* window)
     VkInstanceCreateInfo create_info = {};
     std::vector<const char*> enabled_validation_layers;
 
-#ifdef ENABLE_VALIDATION
+#if 1
     g_debug_print = true;
     for (VkLayerProperties& prop : available_layers)
     {
@@ -1327,7 +1327,6 @@ found_mode:
         screen_size.Height *= scale;
         m_rtt_texture = new GEVulkanFBOTexture(this, screen_size,
             true/*create_depth*/);
-        m_rtt_texture->createRTT();
     }
     else
     {
@@ -1512,6 +1511,12 @@ void GEVulkanDriver::createSamplers()
 // ----------------------------------------------------------------------------
 void GEVulkanDriver::createRenderPass()
 {
+    if (m_rtt_texture)
+    {
+        m_vk->render_pass = m_rtt_texture->createRenderPass(
+            m_swap_chain_image_format);
+        return;
+    }
     VkAttachmentDescription color_attachment = {};
     color_attachment.format = m_swap_chain_image_format;
     color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1589,6 +1594,16 @@ void GEVulkanDriver::createRenderPass()
 void GEVulkanDriver::createFramebuffers()
 {
     const std::vector<VkImageView>& image_views = m_vk->swap_chain_image_views;
+    if (m_rtt_texture)
+    {
+        for (unsigned int i = 0; i < image_views.size(); i++)
+        {
+            m_vk->swap_chain_framebuffers.push_back(
+                m_rtt_texture->createFramebuffer(image_views[i]));
+        }
+        return;
+    }
+
     for (unsigned int i = 0; i < image_views.size(); i++)
     {
         std::vector<VkImageView> attachments =
@@ -1618,7 +1633,6 @@ void GEVulkanDriver::createFramebuffers()
         m_vk->swap_chain_framebuffers.push_back(swap_chain_framebuffer);
     }
 }   // createFramebuffers
-
 
 // ----------------------------------------------------------------------------
 bool GEVulkanDriver::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
@@ -2368,34 +2382,32 @@ GEVulkanMeshCache* GEVulkanDriver::getVulkanMeshCache() const
 // ----------------------------------------------------------------------------
 void GEVulkanDriver::buildCommandBuffers()
 {
-    std::array<VkClearValue, 2> clear_values = {};
+    std::vector<VkClearValue> clear_values;
     video::SColorf cf(getClearColor());
-    clear_values[0].color =
+    VkClearValue clear_color;
+    clear_color.color =
     {
         cf.getRed(), cf.getGreen(), cf.getBlue(), cf.getAlpha()
     };
-    clear_values[1].depthStencil = {1.0f, 0};
+    clear_values.push_back(clear_color);
+    if (m_rtt_texture)
+    {
+        clear_values.resize(1 + m_rtt_texture->getColorAttachmentCount(),
+            clear_color);
+    }
+    VkClearValue depth;
+    depth.depthStencil = {1.0f, 0};
+    clear_values.push_back(depth);
 
     VkRenderPassBeginInfo render_pass_info = {};
     render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_pass_info.clearValueCount = (uint32_t)(clear_values.size());
     render_pass_info.pClearValues = &clear_values[0];
     render_pass_info.renderArea.offset = {0, 0};
-
-    if (m_rtt_texture)
-    {
-        render_pass_info.renderPass = m_rtt_texture->getRTTRenderPass();
-        render_pass_info.framebuffer = m_rtt_texture->getRTTFramebuffer();
-        render_pass_info.renderArea.extent = { m_rtt_texture->getSize().Width,
-            m_rtt_texture->getSize().Height };
-    }
-    else
-    {
-        render_pass_info.renderPass = getRenderPass();
-        render_pass_info.framebuffer =
-            getSwapChainFramebuffers()[getCurrentImageIndex()];
-        render_pass_info.renderArea.extent = getSwapChainExtent();
-    }
+    render_pass_info.renderPass = getRenderPass();
+    render_pass_info.framebuffer =
+        getSwapChainFramebuffers()[getCurrentImageIndex()];
+    render_pass_info.renderArea.extent = getSwapChainExtent();
 
     VkCommandBufferBeginInfo begin_info = {};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -2425,14 +2437,7 @@ void GEVulkanDriver::buildCommandBuffers()
 
     if (m_rtt_texture)
     {
-        vkCmdEndRenderPass(getCurrentCommandBuffer());
-        // No depth buffer in main framebuffer if RTT is used
-        render_pass_info.clearValueCount = 1;
-        render_pass_info.renderPass = getRenderPass();
-        render_pass_info.framebuffer =
-            getSwapChainFramebuffers()[getCurrentImageIndex()];
-        render_pass_info.renderArea.extent = getSwapChainExtent();
-        vkCmdBeginRenderPass(getCurrentCommandBuffer(), &render_pass_info,
+        vkCmdNextSubpass(getCurrentCommandBuffer(),
             VK_SUBPASS_CONTENTS_INLINE);
     }
 

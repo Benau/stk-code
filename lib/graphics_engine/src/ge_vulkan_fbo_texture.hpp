@@ -52,7 +52,16 @@ public:
     VkRenderPass getRTTRenderPass() const         { return m_rtt_render_pass; }
     // ------------------------------------------------------------------------
     VkFramebuffer getRTTFramebuffer() const      { return m_rtt_frame_buffer; }
-
+    // ------------------------------------------------------------------------
+    GEVulkanDepthTexture* getDepthTexture() const   { return m_depth_texture; }
+    // ------------------------------------------------------------------------
+    VkRenderPass createRenderPass(VkFormat final_format) const;
+    // ------------------------------------------------------------------------
+    VkFramebuffer createFramebuffer(VkImageView main) const;
+    // ------------------------------------------------------------------------
+    unsigned getColorAttachmentCount() const                      { return 1; }
+    // ------------------------------------------------------------------------
+    unsigned getFinalSubpassIndex() const                         { return 1; }
 };   // GEVulkanFBOTexture
 
 }

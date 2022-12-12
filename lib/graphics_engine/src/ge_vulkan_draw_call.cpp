@@ -1058,7 +1058,8 @@ start:
     pipeline_info.pColorBlendState = &color_blending;
     pipeline_info.pDynamicState = &dynamic_state_info;
     pipeline_info.layout = m_pipeline_layout;
-    pipeline_info.renderPass = vk->getRTTTexture() ?
+    pipeline_info.renderPass = vk->getRTTTexture() &&
+        vk->getRTTTexture()->getRTTRenderPass() ?
         vk->getRTTTexture()->getRTTRenderPass() : vk->getRenderPass();
     pipeline_info.subpass = 0;
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
