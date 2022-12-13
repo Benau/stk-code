@@ -23,7 +23,8 @@ GEVulkanFBOTexture::GEVulkanFBOTexture(GEVulkanDriver* vk,
     m_size = m_orig_size = m_max_size = size;
     m_internal_format = VK_FORMAT_R8G8B8A8_UNORM;
 
-    if (!createImage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+    if (!createImage(VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
         VK_IMAGE_USAGE_SAMPLED_BIT))
         throw std::runtime_error("createImage failed for fbo texture");
 

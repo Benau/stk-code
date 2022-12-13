@@ -65,6 +65,11 @@ public:
     virtual unsigned getColorAttachmentCount() const              { return 0; }
     // ------------------------------------------------------------------------
     virtual unsigned getFinalSubpassIndex() const                 { return 0; }
+    // ------------------------------------------------------------------------
+    virtual VkDescriptorSetLayout getDescriptorSetLayout() const
+                                                     { return VK_NULL_HANDLE; }
+    // ------------------------------------------------------------------------
+    virtual VkDescriptorSet* getDescriptorSet()                { return NULL; }
 };   // GEVulkanFBOTexture
 
 }

@@ -2434,12 +2434,6 @@ void GEVulkanDriver::buildCommandBuffers()
         PrimitivesDrawn += p.second->getPolyCount();
     }
 
-    if (m_rtt_texture)
-    {
-        vkCmdNextSubpass(getCurrentCommandBuffer(),
-            VK_SUBPASS_CONTENTS_INLINE);
-    }
-
     GEVulkan2dRenderer::render();
 
     vkCmdEndRenderPass(getCurrentCommandBuffer());

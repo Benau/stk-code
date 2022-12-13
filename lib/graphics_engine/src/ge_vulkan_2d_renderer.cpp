@@ -82,8 +82,14 @@ void GEVulkan2dRenderer::createPipelineLayout()
 {
     VkPipelineLayoutCreateInfo pipeline_layout_info = {};
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_info.setLayoutCount = 1;
-    pipeline_layout_info.pSetLayouts = g_texture_descriptor->getDescriptorSetLayout();
+
+    std::vector<VkDescriptorSetLayout> all_layouts;
+    all_layouts.push_back(*g_texture_descriptor->getDescriptorSetLayout());
+    if (g_vk->getRTTTexture())
+        all_layouts.push_back(g_vk->getRTTTexture()->getDescriptorSetLayout());
+
+    pipeline_layout_info.setLayoutCount = all_layouts.size();
+    pipeline_layout_info.pSetLayouts = all_layouts.data();
 
     VkResult result = vkCreatePipelineLayout(g_vk->getDevice(), &pipeline_layout_info,
         nullptr, &g_pipeline_layout);
@@ -279,6 +285,12 @@ void GEVulkan2dRenderer::handleDeletedTextures()
 // ----------------------------------------------------------------------------
 void GEVulkan2dRenderer::render()
 {
+    if (g_vk->getRTTTexture())
+    {
+        vkCmdNextSubpass(g_vk->getCurrentCommandBuffer(),
+            VK_SUBPASS_CONTENTS_INLINE);
+    }
+
     if (g_tris_queue.empty())
         return;
 
@@ -297,6 +309,13 @@ void GEVulkan2dRenderer::render()
 
     vkCmdBindPipeline(g_vk->getCurrentCommandBuffer(),
         VK_PIPELINE_BIND_POINT_GRAPHICS, g_graphics_pipeline);
+
+    if (g_vk->getRTTTexture())
+    {
+        vkCmdBindDescriptorSets(g_vk->getCurrentCommandBuffer(),
+            VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipeline_layout, 1, 1,
+            g_vk->getRTTTexture()->getDescriptorSet(), 0, NULL);
+    }
 
     vkCmdBindVertexBuffers(g_vk->getCurrentCommandBuffer(), 0, 1,
         &buffer, offsets);
