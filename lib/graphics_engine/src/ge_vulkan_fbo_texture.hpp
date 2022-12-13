@@ -8,9 +8,10 @@ namespace GE
 class GEVulkanDepthTexture;
 class GEVulkanFBOTexture : public GEVulkanTexture
 {
-private:
+protected:
     GEVulkanDepthTexture* m_depth_texture;
 
+private:
     VkRenderPass m_rtt_render_pass;
 
     VkFramebuffer m_rtt_frame_buffer;
@@ -55,13 +56,15 @@ public:
     // ------------------------------------------------------------------------
     GEVulkanDepthTexture* getDepthTexture() const   { return m_depth_texture; }
     // ------------------------------------------------------------------------
-    VkRenderPass createRenderPass(VkFormat final_format) const;
+    virtual VkRenderPass createRenderPass(VkFormat final_format)
+                                                     { return VK_NULL_HANDLE; }
     // ------------------------------------------------------------------------
-    VkFramebuffer createFramebuffer(VkImageView main) const;
+    virtual VkFramebuffer createFramebuffer(VkImageView main)
+                                                     { return VK_NULL_HANDLE; }
     // ------------------------------------------------------------------------
-    unsigned getColorAttachmentCount() const                      { return 1; }
+    virtual unsigned getColorAttachmentCount() const              { return 0; }
     // ------------------------------------------------------------------------
-    unsigned getFinalSubpassIndex() const                         { return 1; }
+    virtual unsigned getFinalSubpassIndex() const                 { return 0; }
 };   // GEVulkanFBOTexture
 
 }

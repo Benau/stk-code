@@ -12,9 +12,9 @@
 #include "ge_vulkan_depth_texture.hpp"
 #include "ge_vulkan_draw_call.hpp"
 #include "ge_vulkan_dynamic_spm_buffer.hpp"
-#include "ge_vulkan_fbo_texture.hpp"
 #include "ge_vulkan_features.hpp"
 #include "ge_vulkan_mesh_cache.hpp"
+#include "ge_vulkan_scaled_fbo.hpp"
 #include "ge_vulkan_scene_manager.hpp"
 #include "ge_vulkan_shader_manager.hpp"
 #include "ge_vulkan_skybox_renderer.hpp"
@@ -1325,8 +1325,7 @@ found_mode:
         core::dimension2du screen_size = ScreenSize;
         screen_size.Width *= scale;
         screen_size.Height *= scale;
-        m_rtt_texture = new GEVulkanFBOTexture(this, screen_size,
-            true/*create_depth*/);
+        m_rtt_texture = new GEVulkanScaledFBO(this, screen_size);
     }
     else
     {

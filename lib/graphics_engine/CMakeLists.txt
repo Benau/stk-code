@@ -86,6 +86,7 @@ set(GE_SOURCES
     src/ge_vulkan_features.cpp
     src/ge_vulkan_mesh_cache.cpp
     src/ge_vulkan_mesh_scene_node.cpp
+    src/ge_vulkan_scaled_fbo.cpp
     src/ge_vulkan_scene_manager.cpp
     src/ge_vulkan_shader_manager.cpp
     src/ge_vulkan_skybox_renderer.cpp
