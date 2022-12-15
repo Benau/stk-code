@@ -48,6 +48,10 @@ extern "C" VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     std::string msg = callback_data->pMessage;
     if (msg.find("UNASSIGNED-CoreValidation-Shader-OutputNotConsumed") != std::string::npos)
         return VK_FALSE;
+    // https://github.com/KhronosGroup/Vulkan-Docs/issues/1979
+    if (msg.find("Every input attachment used by the current subpass must be "
+        "bound to the pipeline via a descriptor set") != std::string::npos)
+        return VK_FALSE;
 #ifdef __ANDROID__
     android_LogPriority alp;
     switch (message_severity)
