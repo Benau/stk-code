@@ -800,7 +800,7 @@ void GEVulkanDriver::createInstance(SDL_Window* window)
     validation_features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
     validation_features.enabledValidationFeatureCount = 1;
     VkValidationFeatureEnableEXT enabled_validation_features =
-        VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT;
+        VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
     validation_features.pEnabledValidationFeatures = &enabled_validation_features;
 
     create_info.pNext = &validation_features;
@@ -1323,8 +1323,8 @@ found_mode:
     if (scale != 1.0f)
     {
         core::dimension2du screen_size = ScreenSize;
-        screen_size.Width *= scale;
-        screen_size.Height *= scale;
+        //screen_size.Width *= scale;
+        //screen_size.Height *= scale;
         m_rtt_texture = new GEVulkanScaledFBO(this, screen_size);
     }
     else
@@ -1701,13 +1701,13 @@ bool GEVulkanDriver::beginScene(bool backBuffer, bool zBuffer, SColor color,
     PrimitivesDrawn = m_rtt_polycount;
     m_rtt_polycount = 0;
 
-    if (m_rtt_texture)
+    /*if (m_rtt_texture)
     {
         draw2DImage(m_rtt_texture,core::recti(0, 0,
             ScreenSize.Width, ScreenSize.Height),
             core::recti(0, 0,
             m_rtt_texture->getSize().Width, m_rtt_texture->getSize().Height));
-    }
+    }*/
     return true;
 }   // beginScene
 
