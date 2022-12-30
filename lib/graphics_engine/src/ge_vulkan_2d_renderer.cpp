@@ -94,6 +94,7 @@ void GEVulkan2dRenderer::createPipelineLayout()
 // ----------------------------------------------------------------------------
 void GEVulkan2dRenderer::createGraphicsPipeline()
 {
+    auto shader_constants = GEVulkanShaderManager::getShaderConstantsData();
     VkPipelineShaderStageCreateInfo vert_shader_stage_info = {};
     vert_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vert_shader_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -105,6 +106,7 @@ void GEVulkan2dRenderer::createGraphicsPipeline()
     frag_shader_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     frag_shader_stage_info.module = GEVulkanShaderManager::getShader("2d_render.frag");
     frag_shader_stage_info.pName = "main";
+    frag_shader_stage_info.pSpecializationInfo = &shader_constants->m_info;
 
     VkPipelineShaderStageCreateInfo shader_stages[] =
     {

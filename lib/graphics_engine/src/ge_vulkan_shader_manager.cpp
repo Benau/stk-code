@@ -31,6 +31,33 @@ std::map<std::string, VkShaderModule> g_shaders;
 }   // GEVulkanShaderManager
 
 // ============================================================================
+void ShaderConstantsData::init()
+{
+    m_bind_textures_at_once = GEVulkanFeatures::supportsBindTexturesAtOnce();
+    m_bind_mesh_textures_at_once =
+        GEVulkanFeatures::supportsBindMeshTexturesAtOnce();
+    m_different_texture_per_draw =
+        GEVulkanFeatures::supportsDifferentTexturePerDraw();
+    m_sampler_size = GEVulkanShaderManager::g_sampler_size;
+    m_total_mesh_texture_layer = GEVulkanShaderManager::g_mesh_texture_layer;
+
+    uint32_t offset = 0;
+    for (unsigned i = 0; i < m_map_entries.size(); i++)
+    {
+        m_map_entries[0].constantID = i;
+        m_map_entries[0].offset = offset;
+        m_map_entries[0].size = sizeof(uint32_t);
+        offset += sizeof(uint32_t);
+    }
+
+    m_info.mapEntryCount = m_map_entries.size();
+    m_info.pMapEntries = m_map_entries.data();
+    m_info.dataSize = offsetof(ShaderConstantsData,
+        m_total_mesh_texture_layer);
+    m_info.pData = &m_bind_textures_at_once;
+}   // init
+
+// ============================================================================
 shaderc_include_result* showError(const char* message)
 {
     shaderc_include_result* err = new shaderc_include_result;
@@ -242,5 +269,14 @@ VkShaderModule GEVulkanShaderManager::getShader(const std::string& filename)
 {
     return g_shaders.at(filename);
 }   // getShader
+
+// ----------------------------------------------------------------------------
+std::unique_ptr<ShaderConstantsData>
+                                GEVulkanShaderManager::getShaderConstantsData()
+{
+    ShaderConstantsData* data = new ShaderConstantsData;
+    data->init();
+    return std::unique_ptr<ShaderConstantsData>(data);
+}   // getShaderConstantsData
 
 }
