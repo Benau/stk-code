@@ -38,22 +38,27 @@ void ShaderConstantsData::init()
         GEVulkanFeatures::supportsBindMeshTexturesAtOnce();
     m_different_texture_per_draw =
         GEVulkanFeatures::supportsDifferentTexturePerDraw();
-    m_sampler_size = GEVulkanShaderManager::g_sampler_size;
-    m_total_mesh_texture_layer = GEVulkanShaderManager::g_mesh_texture_layer;
+    if (m_bind_textures_at_once)
+        m_sampler_size = GEVulkanShaderManager::g_sampler_size;
+    else
+        m_sampler_size = 1;
+    if (m_bind_mesh_textures_at_once)
+        m_total_mesh_texture_layer = GEVulkanShaderManager::g_mesh_texture_layer;
+    else
+        m_total_mesh_texture_layer = 1;
 
     uint32_t offset = 0;
     for (unsigned i = 0; i < m_map_entries.size(); i++)
     {
-        m_map_entries[0].constantID = i;
-        m_map_entries[0].offset = offset;
-        m_map_entries[0].size = sizeof(uint32_t);
+        m_map_entries[i].constantID = i;
+        m_map_entries[i].offset = offset;
+        m_map_entries[i].size = sizeof(uint32_t);
         offset += sizeof(uint32_t);
     }
 
     m_info.mapEntryCount = m_map_entries.size();
     m_info.pMapEntries = m_map_entries.data();
-    m_info.dataSize = offsetof(ShaderConstantsData,
-        m_total_mesh_texture_layer);
+    m_info.dataSize = 20;
     m_info.pData = &m_bind_textures_at_once;
 }   // init
 

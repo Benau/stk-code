@@ -60,7 +60,7 @@ void GEVulkanFeatures::init(GEVulkanDriver* vk)
         dynamic_indexing = false;
         g_supports_bind_textures_at_once = false;
     }
-        g_supports_bind_textures_at_once = false;
+    g_supports_bind_textures_at_once = false;
 
     g_supports_multi_draw_indirect = vk->getPhysicalDeviceFeatures().multiDrawIndirect &&
          vk->getPhysicalDeviceFeatures().drawIndirectFirstInstance;

@@ -879,6 +879,7 @@ void GEVulkanDrawCall::createPipeline(GEVulkanDriver* vk,
 {
     bool creating_animated_pipeline_for_skinning = false;
     std::string shader_name = settings.m_shader_name;
+    auto shader_constants = GEVulkanShaderManager::getShaderConstantsData();
 
 start:
     VkPipelineShaderStageCreateInfo vert_shader_stage_info = {};
@@ -888,12 +889,14 @@ start:
         creating_animated_pipeline_for_skinning ?
         settings.m_skinning_vertex_shader : settings.m_vertex_shader);
     vert_shader_stage_info.pName = "main";
+    vert_shader_stage_info.pSpecializationInfo = &shader_constants->m_info;
 
     VkPipelineShaderStageCreateInfo frag_shader_stage_info = {};
     frag_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     frag_shader_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     frag_shader_stage_info.module = GEVulkanShaderManager::getShader(settings.m_fragment_shader);
     frag_shader_stage_info.pName = "main";
+    frag_shader_stage_info.pSpecializationInfo = &shader_constants->m_info;
 
     std::array<VkPipelineShaderStageCreateInfo, 2> shader_stages =
     {{

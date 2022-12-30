@@ -1,3 +1,4 @@
+#include "utils/constants.h"
 #include "utils/spm_layout.h"
 #include "utils/get_vertex_color.h"
 #include "../utils/get_world_location.vert"
@@ -22,9 +23,7 @@ void main()
     f_uv = v_uv + u_object_buffer.m_objects[gl_InstanceIndex].m_texture_trans;
     f_uv_two = v_uv_two;
     f_material_id = u_object_buffer.m_objects[gl_InstanceIndex].m_material_id;
-#ifdef BIND_MESH_TEXTURES_AT_ONCE
-    if (f_material_id < 0)
+    if (BIND_MESH_TEXTURES_AT_ONC && f_material_id < 0)
         f_material_id = u_material_ids.m_material_id[gl_DrawIDARB];
-#endif
     f_hue_change = u_object_buffer.m_objects[gl_InstanceIndex].m_hue_change;
 }
